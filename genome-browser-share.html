@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IGV Genome Browser</title>
+    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.8/dist/igv.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 2px solid #d0d0d0;
+            padding: 15px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .setup-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .setup-card {
+            background: white;
+            border: 1px solid #d0d0d0;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .setup-card h2 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #4a90e2;
+            padding-bottom: 10px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .section p {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        .file-drop-zone {
+            border: 2px dashed #d0d0d0;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+
+        .file-drop-zone:hover {
+            border-color: #4a90e2;
+            background: #f0f7ff;
+        }
+
+        .file-drop-zone.drag-over {
+            border-color: #4a90e2;
+            background: #e3f2fd;
+            transform: scale(1.02);
+        }
+
+        .drop-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.6;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        select, input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+            color: #333;
+        }
+
+        select:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        input[type="file"] {
+            font-size: 12px;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            width: 100%;
+            background: white;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #357abd;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.secondary {
+            background: white;
+            color: #333;
+            border: 1px solid #d0d0d0;
+        }
+
+        button.secondary:hover:not(:disabled) {
+            background: #f5f5f5;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .status-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .divider {
+            text-align: center;
+            margin: 25px 0;
+            color: #999;
+            font-size: 14px;
+            position: relative;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #d0d0d0;
+        }
+
+        .divider::before {
+            left: 0;
+        }
+
+        .divider::after {
+            right: 0;
+        }
+
+        #igvContainer {
+            margin: 20px;
+            background: white;
+            border: 1px solid #d0d0d0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-height: 600px;
+        }
+
+        .controls-bar {
+            background: #f8f9fa;
+            border-bottom: 1px solid #d0d0d0;
+            padding: 12px 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .browser-view {
+            display: none;
+        }
+
+        .browser-view.active {
+            display: block;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .file-list {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            font-size: 11px;
+            padding: 4px 0;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-item::before {
+            content: '📄';
+            font-size: 14px;
+        }
+
+        .track-controls {
+            background: #f8f9fa;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px;
+        }
+
+        .track-controls h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: white;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .track-item label {
+            flex: 1;
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .track-item input[type="text"] {
+            width: 100%;
+            border: 1px solid #d0d0d0;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        input[type="color"] {
+            width: 40px;
+            height: 30px;
+            border: 1px solid #d0d0d0;
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 2px;
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #4a90e2;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .info-box strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c5d7f;
+        }
+
+        /* Compact IGV track styling to match desktop */
+        #igvContainer .igv-track-div {
+            margin-bottom: 0 !important;
+            border-bottom: 1px solid #e0e0e0 !important;
+        }
+
+        #igvContainer .igv-track-label-div {
+            font-size: 11px !important;
+            padding: 2px 5px !important;
+            min-height: 20px !important;
+        }
+
+        #igvContainer .igv-sample-info-div {
+            display: none !important;
+        }
+
+        #igvContainer .igv-gear-menu-column {
+            width: 20px !important;
+        }
+
+        #igvContainer .igv-track-drag-column {
+            width: 10px !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Setup View -->
+    <div id="setupView">
+        <div class="header">
+            <h1>🧬 IGV Genome Browser - Session Setup</h1>
+        </div>
+
+        <div class="setup-container">
+            <div class="info-box">
+                <strong>📋 How to share sessions with collaborators:</strong>
+                1. Load your BigWig files and configure track names/colors<br>
+                2. Click "Save Session Config" to download config.json<br>
+                3. Share a folder containing config.json + all BigWig files<br>
+                4. Recipients can drag & drop the entire folder to load everything with your exact settings!
+            </div>
+
+            <div class="setup-card">
+                <h2>Option 1: Load Existing Session</h2>
+                
+                <div class="section">
+                    <h3>📁 Drop Session Folder or Select Files</h3>
+                    <p>Upload a folder containing config.json and BigWig files, or select them individually.</p>
+                    
+                    <div class="file-drop-zone" id="dropZone">
+                        <div class="drop-icon">📂</div>
+                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+                            Drop folder or files here
+                        </div>
+                        <div style="font-size: 12px; color: #666;">
+                            or click to browse for files
+                        </div>
+                    </div>
+
+                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.json" style="display: none;">
+                    
+                    <div class="button-group" style="margin-top: 15px;">
+                        <button onclick="document.getElementById('folderInput').click()" class="secondary">
+                            📁 Select Folder
+                        </button>
+                        <button onclick="document.getElementById('filesInput').click()" class="secondary">
+                            📄 Select Files
+                        </button>
+                    </div>
+
+                    <div id="uploadStatus"></div>
+                    <div id="fileList" class="file-list hidden"></div>
+                </div>
+            </div>
+
+            <div class="divider">OR</div>
+
+            <div class="setup-card">
+                <h2>Option 2: Create New Session</h2>
+                
+                <div class="section">
+                    <div class="form-group">
+                        <label>Reference Genome *</label>
+                        <select id="genomeSelect">
+                            <option value="">Select genome...</option>
+                            <option value="hg38">Human (GRCh38/hg38)</option>
+                            <option value="hg19">Human (GRCh37/hg19)</option>
+                            <option value="mm10">Mouse (GRCm38/mm10)</option>
+                            <option value="mm39">Mouse (GRCm39/mm39)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Starting Location (optional)</label>
+                        <input type="text" id="startLocation" placeholder="e.g., chr17:7,661,779-7,687,550">
+                        <p style="font-size: 11px; color: #666; margin-top: 4px;">
+                            Leave blank to start at a default location
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>BigWig Files *</label>
+                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig">
+                        <p style="font-size: 11px; color: #666; margin-top: 4px;">
+                            Select one or more BigWig files (.bw, .bigWig)
+                        </p>
+                    </div>
+
+                    <button onclick="createNewSession()" style="width: 100%;">
+                        🚀 Launch Browser
+                    </button>
+
+                    <div id="manualStatus"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Browser View -->
+    <div id="browserView" class="browser-view">
+        <div class="header">
+            <h1>🧬 IGV Genome Browser</h1>
+        </div>
+
+        <div class="controls-bar">
+            <span style="font-size: 12px; color: #666;">Genome: <strong id="genomeDisplay">-</strong></span>
+            <span style="font-size: 12px; color: #666; margin-left: 15px;">
+                Track Height: 
+                <select id="trackHeightSelect" onchange="updateAllTrackHeights(this.value)" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
+                    <option value="40">Compact (40px)</option>
+                    <option value="50" selected>Standard (50px)</option>
+                    <option value="75">Medium (75px)</option>
+                    <option value="100">Tall (100px)</option>
+                    <option value="150">Extra Tall (150px)</option>
+                </select>
+            </span>
+            <span style="font-size: 12px; color: #666; margin-left: 15px;">
+                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="checkbox" id="groupAutoscaleToggle" onchange="toggleGroupAutoscale(this.checked)" checked style="cursor: pointer;">
+                    Group Autoscale
+                </label>
+            </span>
+            <div style="flex: 1;"></div>
+            <button onclick="saveSessionConfig()" class="secondary">
+                💾 Save Session Config
+            </button>
+            <button onclick="exportImage()" class="secondary">
+                📷 Export Image
+            </button>
+            <button onclick="backToSetup()" class="secondary">
+                ← Back to Setup
+            </button>
+        </div>
+
+        <div id="igvContainer"></div>
+
+        <div class="track-controls" id="trackControls">
+            <h3>Track Settings</h3>
+            <p style="font-size: 11px; color: #666; margin-bottom: 12px;">
+                Customize track names and colors. Changes will be saved in your session config.
+            </p>
+            <div id="trackList"></div>
+        </div>
+    </div>
+
+    <script>
+        let igvBrowser = null;
+        let sessionData = {
+            genome: null,
+            locus: null,
+            tracks: [],
+            bigWigFiles: {}
+        };
+
+        // Initialize drag and drop
+        const dropZone = document.getElementById('dropZone');
+        
+        dropZone.addEventListener('click', () => {
+            document.getElementById('filesInput').click();
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', handleDrop);
+
+        document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
+        document.getElementById('filesInput').addEventListener('change', handleFilesSelect);
+
+        async function handleDrop(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const items = e.dataTransfer.items;
+            const files = [];
+            
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i].webkitGetAsEntry();
+                if (item) {
+                    await traverseFileTree(item, files);
+                }
+            }
+            
+            if (files.length > 0) {
+                await processFiles(files);
+            }
+        }
+
+        async function traverseFileTree(item, files) {
+            if (item.isFile) {
+                const file = await new Promise(resolve => item.file(resolve));
+                files.push(file);
+            } else if (item.isDirectory) {
+                const reader = item.createReader();
+                const entries = await new Promise(resolve => reader.readEntries(resolve));
+                for (const entry of entries) {
+                    await traverseFileTree(entry, files);
+                }
+            }
+        }
+
+        function handleFolderSelect(e) {
+            const files = Array.from(e.target.files);
+            processFiles(files);
+        }
+
+        function handleFilesSelect(e) {
+            const files = Array.from(e.target.files);
+            processFiles(files);
+        }
+
+        async function processFiles(files) {
+            const statusDiv = document.getElementById('uploadStatus');
+            const fileListDiv = document.getElementById('fileList');
+            
+            statusDiv.innerHTML = '<div class="status-message status-info">📂 Processing files...</div>';
+            fileListDiv.classList.add('hidden');
+            
+            try {
+                let configFile = null;
+                const bigWigFiles = [];
+                
+                // Separate config and BigWig files
+                for (const file of files) {
+                    if (file.name === 'config.json') {
+                        configFile = file;
+                    } else if (file.name.match(/\.(bw|bigwig|bigWig)$/i)) {
+                        bigWigFiles.push(file);
+                    }
+                }
+                
+                if (bigWigFiles.length === 0) {
+                    statusDiv.innerHTML = '<div class="status-message status-error">❌ No BigWig files found. Please upload .bw or .bigWig files.</div>';
+                    return;
+                }
+
+                // Show file list
+                fileListDiv.innerHTML = '<div style="font-weight: 600; margin-bottom: 8px;">Files loaded:</div>';
+                if (configFile) {
+                    fileListDiv.innerHTML += '<div class="file-item">config.json</div>';
+                }
+                bigWigFiles.forEach(f => {
+                    fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`;
+                });
+                fileListDiv.classList.remove('hidden');
+
+                // Store BigWig files
+                sessionData.bigWigFiles = {};
+                for (const file of bigWigFiles) {
+                    sessionData.bigWigFiles[file.name] = file;
+                }
+
+                // Load config if present
+                if (configFile) {
+                    const configText = await configFile.text();
+                    const config = JSON.parse(configText);
+                    
+                    sessionData.genome = config.genome || 'hg38';
+                    sessionData.locus = config.region || null;
+                    
+                    if (config.tracks) {
+                        sessionData.tracks = config.tracks;
+                    } else {
+                        // Create default tracks
+                        sessionData.tracks = createDefaultTracks(bigWigFiles);
+                    }
+                    
+                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
+                } else {
+                    // No config - use defaults
+                    sessionData.genome = 'hg38';
+                    sessionData.tracks = createDefaultTracks(bigWigFiles);
+                    
+                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded! Launching browser with default settings...</div>';
+                }
+
+                // Launch browser after short delay
+                setTimeout(() => {
+                    launchBrowser();
+                }, 1000);
+
+            } catch (error) {
+                console.error('Error processing files:', error);
+                statusDiv.innerHTML = `<div class="status-message status-error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function createDefaultTracks(files) {
+            const colors = ['#FF0000', '#00AA00', '#0000FF', '#FF8800', '#8800FF', '#00CCCC'];
+            return files.map((file, i) => ({
+                name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''),
+                file: file.name,
+                color: colors[i % colors.length],
+                type: 'wig',
+                format: 'bigwig'
+            }));
+        }
+
+        async function createNewSession() {
+            const statusDiv = document.getElementById('manualStatus');
+            const genome = document.getElementById('genomeSelect').value;
+            const location = document.getElementById('startLocation').value.trim();
+            const bigWigInput = document.getElementById('bigWigInput');
+
+            // Validation
+            if (!genome) {
+                statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select a genome</div>';
+                return;
+            }
+
+            if (!bigWigInput.files || bigWigInput.files.length === 0) {
+                statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select at least one BigWig file</div>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<div class="status-message status-info">🚀 Creating session...</div>';
+
+            try {
+                sessionData.genome = genome;
+                sessionData.locus = location || null;
+                sessionData.bigWigFiles = {};
+                
+                const files = Array.from(bigWigInput.files);
+                for (const file of files) {
+                    sessionData.bigWigFiles[file.name] = file;
+                }
+
+                sessionData.tracks = createDefaultTracks(files);
+
+                statusDiv.innerHTML = '<div class="status-message status-success">✅ Session created! Launching browser...</div>';
+                
+                setTimeout(() => {
+                    launchBrowser();
+                }, 500);
+
+            } catch (error) {
+                console.error('Error creating session:', error);
+                statusDiv.innerHTML = `<div class="status-message status-error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function launchBrowser() {
+            // Switch views
+            document.getElementById('setupView').style.display = 'none';
+            document.getElementById('browserView').classList.add('active');
+            document.getElementById('genomeDisplay').textContent = sessionData.genome.toUpperCase();
+
+            // Default loci for genomes
+            const defaultLoci = {
+                'hg38': 'chr17:7,661,779-7,687,550',
+                'hg19': 'chr17:7,571,720-7,590,868',
+                'mm10': 'chr11:69,580,359-69,591,873',
+                'mm39': 'chr11:69,379,365-69,390,879'
+            };
+
+            const locus = sessionData.locus || defaultLoci[sessionData.genome] || 'chr1:1,000,000-2,000,000';
+
+            // Create IGV options
+            const igvOptions = {
+                genome: sessionData.genome,
+                locus: locus,
+                tracks: []
+            };
+
+            // Add gene track (will be loaded by IGV.js automatically)
+            // The genome reference includes gene annotations
+
+            // Add BigWig tracks and store references
+            sessionData.trackViewIndices = []; // Track which IGV trackView index corresponds to our tracks
+            
+            for (let i = 0; i < sessionData.tracks.length; i++) {
+                const track = sessionData.tracks[i];
+                const file = sessionData.bigWigFiles[track.file];
+                if (file) {
+                    igvOptions.tracks.push({
+                        name: track.name,
+                        type: 'wig',
+                        format: 'bigwig',
+                        url: URL.createObjectURL(file),
+                        color: track.color,
+                        height: 50,
+                        autoscale: true,
+                        autoscaleGroup: 'group1',
+                        min: 0
+                    });
+                    // Store which track index in our array maps to which IGV track
+                    // IGV adds a ruler/sequence track at index 0, then genes, then our tracks
+                    sessionData.trackViewIndices.push(i);
+                }
+            }
+
+            // Create IGV browser
+            try {
+                igvBrowser = await igv.createBrowser(document.getElementById('igvContainer'), igvOptions);
+                console.log('IGV Browser created successfully');
+                console.log('Track views:', igvBrowser.trackViews.length);
+                renderTrackControls();
+            } catch (error) {
+                console.error('Error creating IGV browser:', error);
+                alert('Error loading browser: ' + error.message);
+            }
+        }
+
+        function renderTrackControls() {
+            const trackList = document.getElementById('trackList');
+            trackList.innerHTML = '';
+
+            sessionData.tracks.forEach((track, index) => {
+                const trackDiv = document.createElement('div');
+                trackDiv.className = 'track-item';
+                
+                trackDiv.innerHTML = `
+                    <input type="color" 
+                           id="colorPicker${index}"
+                           value="${track.color}" 
+                           onchange="updateTrackColor(${index}, this.value)" 
+                           title="Change track color"
+                           style="width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px;">
+                    <label style="flex: 1; margin: 0; font-weight: normal;">
+                        <input type="text" 
+                               value="${track.name}" 
+                               onchange="updateTrackName(${index}, this.value)"
+                               style="width: 100%; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    </label>
+                `;
+                
+                trackList.appendChild(trackDiv);
+            });
+        }
+
+        async function updateTrackColor(index, color) {
+            sessionData.tracks[index].color = color;
+            
+            // Find the correct IGV track - need to account for ruler and gene tracks
+            if (igvBrowser && igvBrowser.trackViews) {
+                // IGV.js typically has: [0] = ruler/ideogram, [1] = genes, [2+] = our data tracks
+                // So our track at index 0 is at IGV trackView index 2 (or later)
+                
+                // Find the track by name to be safe
+                const trackName = sessionData.tracks[index].name;
+                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                    const trackView = igvBrowser.trackViews[i];
+                    if (trackView.track && trackView.track.name === trackName) {
+                        trackView.track.color = color;
+                        trackView.repaintViews();
+                        console.log(`Updated color for track "${trackName}" at IGV index ${i} to ${color}`);
+                        break;
+                    }
+                }
+            }
+        }
+
+        function updateTrackName(index, name) {
+            const oldName = sessionData.tracks[index].name;
+            sessionData.tracks[index].name = name.trim();
+            
+            // Update IGV track by finding it by old name
+            if (igvBrowser && igvBrowser.trackViews) {
+                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                    const trackView = igvBrowser.trackViews[i];
+                    if (trackView.track && trackView.track.name === oldName) {
+                        trackView.track.name = name.trim();
+                        trackView.repaintViews();
+                        console.log(`Updated name for track at IGV index ${i} from "${oldName}" to "${name.trim()}"`);
+                        break;
+                    }
+                }
+            }
+        }
+
+        function updateAllTrackHeights(height) {
+            const heightValue = parseInt(height);
+            if (igvBrowser && igvBrowser.trackViews) {
+                // Update all data tracks (skip first track which is genes/ruler)
+                for (let i = 1; i < igvBrowser.trackViews.length; i++) {
+                    const trackView = igvBrowser.trackViews[i];
+                    if (trackView && trackView.track) {
+                        trackView.setTrackHeight(heightValue);
+                    }
+                }
+            }
+        }
+
+        function toggleGroupAutoscale(enabled) {
+            if (!igvBrowser || !igvBrowser.trackViews) return;
+            
+            // Update all data tracks
+            for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                const trackView = igvBrowser.trackViews[i];
+                if (trackView && trackView.track && trackView.track.type === 'wig') {
+                    if (enabled) {
+                        trackView.track.autoscaleGroup = 'group1';
+                    } else {
+                        trackView.track.autoscaleGroup = undefined;
+                    }
+                }
+            }
+            
+            // Trigger repaint to apply changes
+            igvBrowser.updateViews();
+            
+            console.log('Group autoscale ' + (enabled ? 'enabled' : 'disabled'));
+        }
+
+        function saveSessionConfig() {
+            const config = {
+                genome: sessionData.genome,
+                region: igvBrowser ? igvBrowser.currentLoci()[0] : sessionData.locus,
+                tracks: sessionData.tracks.map(t => ({
+                    name: t.name,
+                    file: t.file,
+                    color: t.color,
+                    type: t.type || 'wig',
+                    format: t.format || 'bigwig'
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'config.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and all BigWig files in one folder\n2. Share the folder\n3. They can drag & drop it to load everything!');
+        }
+
+        function exportImage() {
+            if (!igvBrowser) return;
+            
+            igvBrowser.toSVG().then(svg => {
+                const blob = new Blob([svg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const locus = igvBrowser.currentLoci()[0].replace(/:/g, '_').replace(/,/g, '');
+                a.download = `igv_view_${locus}.svg`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        function backToSetup() {
+            if (confirm('Are you sure? This will close the current browser session.')) {
+                // Clean up
+                if (igvBrowser) {
+                    igvBrowser.removeAllTracks();
+                    igvBrowser = null;
+                }
+                
+                // Clear session data
+                Object.values(sessionData.bigWigFiles).forEach(file => {
+                    if (file instanceof File) {
+                        // URLs are already revoked by IGV
+                    }
+                });
+                
+                sessionData = {
+                    genome: null,
+                    locus: null,
+                    tracks: [],
+                    bigWigFiles: {}
+                };
+                
+                // Reset form
+                document.getElementById('genomeSelect').value = '';
+                document.getElementById('startLocation').value = '';
+                document.getElementById('bigWigInput').value = '';
+                document.getElementById('uploadStatus').innerHTML = '';
+                document.getElementById('manualStatus').innerHTML = '';
+                document.getElementById('fileList').classList.add('hidden');
+                
+                // Switch views
+                document.getElementById('browserView').classList.remove('active');
+                document.getElementById('setupView').style.display = 'block';
+                document.getElementById('igvContainer').innerHTML = '';
+            }
+        }
+    </script>
+</body>
+</html>
