@@ -19,7 +19,7 @@ A lightweight, browser-based genome browser built on [IGV.js](https://github.com
 
 ### Option 1: Load Existing Session
 
-1. Open `igv_browser.html` in your web browser
+1. Open `genome-browser-share.html` in your web browser
 2. Drag and drop a folder containing:
    - `config.json` (session configuration)
    - One or more BigWig files (`.bw`, `.bigWig`)
@@ -27,7 +27,7 @@ A lightweight, browser-based genome browser built on [IGV.js](https://github.com
 
 ### Option 2: Create New Session
 
-1. Open `igv_browser.html` in your web browser
+1. Open `genome-browser-share.html` in your web browser
 2. Select a reference genome (hg38, hg19, mm10, mm39)
 3. Upload your BigWig files
 4. Click "Launch Browser"
@@ -116,7 +116,7 @@ session_folder/
 
 ### Step 4: Collaborators Load Session
 Recipients simply:
-1. Open `igv_browser.html`
+1. Open `genome-browser-share.html`
 2. Drag and drop the entire folder
 3. Browser loads with your exact configuration!
 
