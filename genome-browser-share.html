@@ -486,10 +486,7 @@
                 </select>
             </span>
             <span style="font-size: 12px; color: #666; margin-left: 15px;">
-                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-                    <input type="checkbox" id="groupAutoscaleToggle" onchange="toggleGroupAutoscale(this.checked)" checked style="cursor: pointer;">
-                    Group Autoscale
-                </label>
+                Autoscale Groups: <strong id="groupCountDisplay">1</strong>
             </span>
             <div style="flex: 1;"></div>
             <button onclick="saveSessionConfig()" class="secondary">
@@ -508,9 +505,20 @@
         <div class="track-controls" id="trackControls">
             <h3>Track Settings</h3>
             <p style="font-size: 11px; color: #666; margin-bottom: 12px;">
-                Customize track names and colors. Changes will be saved in your session config.
+                Customize track names, colors, and autoscale groups. Changes will be saved in your session config.
             </p>
             <div id="trackList"></div>
+
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #d0d0d0;">
+                <h4 style="font-size: 13px; margin-bottom: 10px; color: #333;">Autoscale Groups</h4>
+                <p style="font-size: 11px; color: #666; margin-bottom: 10px;">
+                    Tracks in the same group share the same Y-axis scale. Tracks set to "None" scale independently.
+                </p>
+                <div id="groupList" style="margin-bottom: 10px;"></div>
+                <button onclick="addNewGroup()" class="secondary" style="padding: 6px 12px; font-size: 11px;">
+                    + Add Group
+                </button>
+            </div>
         </div>
     </div>
 
@@ -520,7 +528,8 @@
             genome: null,
             locus: null,
             tracks: [],
-            bigWigFiles: {}
+            bigWigFiles: {},
+            autoscaleGroups: ['Group 1']
         };
 
         // Initialize drag and drop
@@ -631,23 +640,29 @@
                 if (configFile) {
                     const configText = await configFile.text();
                     const config = JSON.parse(configText);
-                    
+
                     sessionData.genome = config.genome || 'hg38';
                     sessionData.locus = config.region || null;
-                    
+                    sessionData.autoscaleGroups = config.autoscaleGroups || ['Group 1'];
+
                     if (config.tracks) {
-                        sessionData.tracks = config.tracks;
+                        // Preserve autoscaleGroup from config, default to 'Group 1' for backward compatibility
+                        sessionData.tracks = config.tracks.map(t => ({
+                            ...t,
+                            autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : 'Group 1'
+                        }));
                     } else {
                         // Create default tracks
                         sessionData.tracks = createDefaultTracks(bigWigFiles);
                     }
-                    
+
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
                 } else {
                     // No config - use defaults
                     sessionData.genome = 'hg38';
+                    sessionData.autoscaleGroups = ['Group 1'];
                     sessionData.tracks = createDefaultTracks(bigWigFiles);
-                    
+
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded! Launching browser with default settings...</div>';
                 }
 
@@ -669,7 +684,8 @@
                 file: file.name,
                 color: colors[i % colors.length],
                 type: 'wig',
-                format: 'bigwig'
+                format: 'bigwig',
+                autoscaleGroup: 'Group 1'
             }));
         }
 
@@ -696,7 +712,8 @@
                 sessionData.genome = genome;
                 sessionData.locus = location || null;
                 sessionData.bigWigFiles = {};
-                
+                sessionData.autoscaleGroups = ['Group 1'];
+
                 const files = Array.from(bigWigInput.files);
                 for (const file of files) {
                     sessionData.bigWigFiles[file.name] = file;
@@ -757,7 +774,7 @@
                         color: track.color,
                         height: 50,
                         autoscale: true,
-                        autoscaleGroup: 'group1',
+                        autoscaleGroup: track.autoscaleGroup || undefined,
                         min: 0
                     });
                     // Store which track index in our array maps to which IGV track
@@ -772,6 +789,8 @@
                 console.log('IGV Browser created successfully');
                 console.log('Track views:', igvBrowser.trackViews.length);
                 renderTrackControls();
+                renderGroupList();
+                updateGroupCountDisplay();
             } catch (error) {
                 console.error('Error creating IGV browser:', error);
                 alert('Error loading browser: ' + error.message);
@@ -785,22 +804,33 @@
             sessionData.tracks.forEach((track, index) => {
                 const trackDiv = document.createElement('div');
                 trackDiv.className = 'track-item';
-                
+
+                // Build autoscale group dropdown options
+                let groupOptions = '<option value="">None (Independent)</option>';
+                sessionData.autoscaleGroups.forEach(group => {
+                    const selected = track.autoscaleGroup === group ? 'selected' : '';
+                    groupOptions += `<option value="${group}" ${selected}>${group}</option>`;
+                });
+
                 trackDiv.innerHTML = `
-                    <input type="color" 
+                    <input type="color"
                            id="colorPicker${index}"
-                           value="${track.color}" 
-                           onchange="updateTrackColor(${index}, this.value)" 
+                           value="${track.color}"
+                           onchange="updateTrackColor(${index}, this.value)"
                            title="Change track color"
                            style="width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px;">
                     <label style="flex: 1; margin: 0; font-weight: normal;">
-                        <input type="text" 
-                               value="${track.name}" 
+                        <input type="text"
+                               value="${track.name}"
                                onchange="updateTrackName(${index}, this.value)"
                                style="width: 100%; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
                     </label>
+                    <select onchange="updateTrackAutoscaleGroup(${index}, this.value)"
+                            style="padding: 4px 8px; font-size: 11px; border: 1px solid #d0d0d0; border-radius: 3px; min-width: 120px;">
+                        ${groupOptions}
+                    </select>
                 `;
-                
+
                 trackList.appendChild(trackDiv);
             });
         }
@@ -858,37 +888,177 @@
             }
         }
 
-        function toggleGroupAutoscale(enabled) {
-            if (!igvBrowser || !igvBrowser.trackViews) return;
-            
-            // Update all data tracks
-            for (let i = 0; i < igvBrowser.trackViews.length; i++) {
-                const trackView = igvBrowser.trackViews[i];
-                if (trackView && trackView.track && trackView.track.type === 'wig') {
-                    if (enabled) {
-                        trackView.track.autoscaleGroup = 'group1';
-                    } else {
-                        trackView.track.autoscaleGroup = undefined;
+        function updateTrackAutoscaleGroup(trackIndex, groupName) {
+            // Update sessionData
+            sessionData.tracks[trackIndex].autoscaleGroup = groupName || null;
+
+            // Update IGV track
+            if (igvBrowser && igvBrowser.trackViews) {
+                const trackName = sessionData.tracks[trackIndex].name;
+                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                    const trackView = igvBrowser.trackViews[i];
+                    if (trackView.track && trackView.track.name === trackName) {
+                        trackView.track.autoscaleGroup = groupName || undefined;
+                        break;
                     }
                 }
+                igvBrowser.updateViews();
             }
-            
-            // Trigger repaint to apply changes
-            igvBrowser.updateViews();
-            
-            console.log('Group autoscale ' + (enabled ? 'enabled' : 'disabled'));
+
+            updateGroupCountDisplay();
+            renderGroupList();
+            console.log(`Track "${sessionData.tracks[trackIndex].name}" assigned to group: ${groupName || 'None'}`);
+        }
+
+        function addNewGroup() {
+            // Find unique name
+            let num = sessionData.autoscaleGroups.length + 1;
+            let newName = `Group ${num}`;
+            while (sessionData.autoscaleGroups.includes(newName)) {
+                num++;
+                newName = `Group ${num}`;
+            }
+
+            sessionData.autoscaleGroups.push(newName);
+            updateGroupCountDisplay();
+            renderGroupList();
+            renderTrackControls();
+            console.log(`Added new autoscale group: ${newName}`);
+        }
+
+        function removeGroup(groupName) {
+            // Count tracks in this group
+            const tracksInGroup = sessionData.tracks.filter(t => t.autoscaleGroup === groupName).length;
+
+            if (tracksInGroup > 0) {
+                if (!confirm(`"${groupName}" has ${tracksInGroup} track(s) assigned. Remove the group and set those tracks to independent scaling?`)) {
+                    return;
+                }
+            }
+
+            // Remove group from list
+            const index = sessionData.autoscaleGroups.indexOf(groupName);
+            if (index > -1) {
+                sessionData.autoscaleGroups.splice(index, 1);
+            }
+
+            // Update tracks that were in this group
+            sessionData.tracks.forEach((track, i) => {
+                if (track.autoscaleGroup === groupName) {
+                    track.autoscaleGroup = null;
+                    // Update IGV track
+                    if (igvBrowser && igvBrowser.trackViews) {
+                        for (let j = 0; j < igvBrowser.trackViews.length; j++) {
+                            const trackView = igvBrowser.trackViews[j];
+                            if (trackView.track && trackView.track.name === track.name) {
+                                trackView.track.autoscaleGroup = undefined;
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (igvBrowser) {
+                igvBrowser.updateViews();
+            }
+
+            updateGroupCountDisplay();
+            renderGroupList();
+            renderTrackControls();
+            console.log(`Removed autoscale group: ${groupName}`);
+        }
+
+        function renameGroup(oldName, newName) {
+            newName = newName.trim();
+            if (!newName || newName === oldName) return;
+
+            // Check for duplicate
+            if (sessionData.autoscaleGroups.includes(newName)) {
+                alert(`A group named "${newName}" already exists.`);
+                renderGroupList();
+                return;
+            }
+
+            // Update group name in list
+            const index = sessionData.autoscaleGroups.indexOf(oldName);
+            if (index > -1) {
+                sessionData.autoscaleGroups[index] = newName;
+            }
+
+            // Update tracks that reference this group
+            sessionData.tracks.forEach((track, i) => {
+                if (track.autoscaleGroup === oldName) {
+                    track.autoscaleGroup = newName;
+                    // Update IGV track
+                    if (igvBrowser && igvBrowser.trackViews) {
+                        for (let j = 0; j < igvBrowser.trackViews.length; j++) {
+                            const trackView = igvBrowser.trackViews[j];
+                            if (trackView.track && trackView.track.name === track.name) {
+                                trackView.track.autoscaleGroup = newName;
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+
+            renderGroupList();
+            renderTrackControls();
+            console.log(`Renamed autoscale group: "${oldName}" -> "${newName}"`);
+        }
+
+        function renderGroupList() {
+            const groupList = document.getElementById('groupList');
+            if (!groupList) return;
+
+            groupList.innerHTML = '';
+
+            sessionData.autoscaleGroups.forEach((group, index) => {
+                const trackCount = sessionData.tracks.filter(t => t.autoscaleGroup === group).length;
+
+                const groupDiv = document.createElement('div');
+                groupDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; margin-bottom: 6px;';
+
+                groupDiv.innerHTML = `
+                    <input type="text"
+                           value="${group}"
+                           onchange="renameGroup('${group}', this.value)"
+                           style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    <span style="font-size: 11px; color: #666; min-width: 50px;">${trackCount} track${trackCount !== 1 ? 's' : ''}</span>
+                    <button onclick="removeGroup('${group}')"
+                            class="secondary"
+                            style="padding: 4px 8px; font-size: 10px; color: #c00;"
+                            title="Remove group">✕</button>
+                `;
+
+                groupList.appendChild(groupDiv);
+            });
+
+            if (sessionData.autoscaleGroups.length === 0) {
+                groupList.innerHTML = '<p style="font-size: 11px; color: #999; font-style: italic;">No autoscale groups defined.</p>';
+            }
+        }
+
+        function updateGroupCountDisplay() {
+            const display = document.getElementById('groupCountDisplay');
+            if (display) {
+                display.textContent = sessionData.autoscaleGroups.length;
+            }
         }
 
         function saveSessionConfig() {
             const config = {
                 genome: sessionData.genome,
                 region: igvBrowser ? igvBrowser.currentLoci()[0] : sessionData.locus,
+                autoscaleGroups: sessionData.autoscaleGroups,
                 tracks: sessionData.tracks.map(t => ({
                     name: t.name,
                     file: t.file,
                     color: t.color,
                     type: t.type || 'wig',
-                    format: t.format || 'bigwig'
+                    format: t.format || 'bigwig',
+                    autoscaleGroup: t.autoscaleGroup || null
                 }))
             };
 
@@ -941,7 +1111,8 @@
                     genome: null,
                     locus: null,
                     tracks: [],
-                    bigWigFiles: {}
+                    bigWigFiles: {},
+                    autoscaleGroups: ['Group 1']
                 };
                 
                 // Reset form
