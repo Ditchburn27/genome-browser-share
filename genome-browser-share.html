@@ -372,6 +372,46 @@
         #igvContainer .igv-track-drag-column {
             width: 10px !important;
         }
+
+        .track-item.selected {
+            background: #e3f2fd;
+            border-color: #4a90e2;
+        }
+
+        .track-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .selection-toolbar {
+            display: none;
+            padding: 10px;
+            background: #e3f2fd;
+            border: 1px solid #4a90e2;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .selection-toolbar.visible {
+            display: flex;
+        }
+
+        .track-group-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            color: #555;
+            white-space: nowrap;
+        }
+
+        .track-group-badge.has-group {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
     </style>
 </head>
 <body>
@@ -505,14 +545,28 @@
         <div class="track-controls" id="trackControls">
             <h3>Track Settings</h3>
             <p style="font-size: 11px; color: #666; margin-bottom: 12px;">
-                Customize track names, colors, and autoscale groups. Changes will be saved in your session config.
+                Customize track names and colors. Shift-click to select multiple tracks, then use the toolbar to set autoscale groups.
             </p>
+
+            <div class="selection-toolbar" id="selectionToolbar">
+                <span style="font-size: 12px; font-weight: 600;"><span id="selectedCount">0</span> tracks selected</span>
+                <select id="groupAssignSelect" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
+                    <option value="">None (Independent)</option>
+                </select>
+                <button onclick="assignSelectedToGroup()" style="padding: 6px 12px; font-size: 11px;">
+                    Set Group
+                </button>
+                <button onclick="clearSelection()" class="secondary" style="padding: 6px 12px; font-size: 11px;">
+                    Clear Selection
+                </button>
+            </div>
+
             <div id="trackList"></div>
 
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #d0d0d0;">
                 <h4 style="font-size: 13px; margin-bottom: 10px; color: #333;">Autoscale Groups</h4>
                 <p style="font-size: 11px; color: #666; margin-bottom: 10px;">
-                    Tracks in the same group share the same Y-axis scale. Tracks set to "None" scale independently.
+                    Tracks in the same group share the same Y-axis scale.
                 </p>
                 <div id="groupList" style="margin-bottom: 10px;"></div>
                 <button onclick="addNewGroup()" class="secondary" style="padding: 6px 12px; font-size: 11px;">
@@ -531,6 +585,8 @@
             bigWigFiles: {},
             autoscaleGroups: ['Group 1']
         };
+        let selectedTracks = new Set();
+        let lastClickedIndex = null;
 
         // Initialize drag and drop
         const dropZone = document.getElementById('dropZone');
@@ -803,36 +859,37 @@
 
             sessionData.tracks.forEach((track, index) => {
                 const trackDiv = document.createElement('div');
-                trackDiv.className = 'track-item';
+                trackDiv.className = 'track-item' + (selectedTracks.has(index) ? ' selected' : '');
+                trackDiv.dataset.index = index;
 
-                // Build autoscale group dropdown options
-                let groupOptions = '<option value="">None (Independent)</option>';
-                sessionData.autoscaleGroups.forEach(group => {
-                    const selected = track.autoscaleGroup === group ? 'selected' : '';
-                    groupOptions += `<option value="${group}" ${selected}>${group}</option>`;
-                });
+                const groupBadge = track.autoscaleGroup
+                    ? `<span class="track-group-badge has-group">${track.autoscaleGroup}</span>`
+                    : `<span class="track-group-badge">Independent</span>`;
 
                 trackDiv.innerHTML = `
+                    <input type="checkbox"
+                           ${selectedTracks.has(index) ? 'checked' : ''}
+                           onclick="handleTrackSelect(event, ${index})"
+                           title="Select track (Shift-click to select range)">
                     <input type="color"
                            id="colorPicker${index}"
                            value="${track.color}"
                            onchange="updateTrackColor(${index}, this.value)"
                            title="Change track color"
                            style="width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px;">
-                    <label style="flex: 1; margin: 0; font-weight: normal;">
-                        <input type="text"
-                               value="${track.name}"
-                               onchange="updateTrackName(${index}, this.value)"
-                               style="width: 100%; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
-                    </label>
-                    <select onchange="updateTrackAutoscaleGroup(${index}, this.value)"
-                            style="padding: 4px 8px; font-size: 11px; border: 1px solid #d0d0d0; border-radius: 3px; min-width: 120px;">
-                        ${groupOptions}
-                    </select>
+                    <input type="text"
+                           id="trackName${index}"
+                           value="${track.name}"
+                           onchange="updateTrackName(${index}, this.value)"
+                           onclick="event.stopPropagation()"
+                           style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    ${groupBadge}
                 `;
 
                 trackList.appendChild(trackDiv);
             });
+
+            updateSelectionToolbar();
         }
 
         async function updateTrackColor(index, color) {
@@ -888,26 +945,89 @@
             }
         }
 
-        function updateTrackAutoscaleGroup(trackIndex, groupName) {
-            // Update sessionData
-            sessionData.tracks[trackIndex].autoscaleGroup = groupName || null;
+        function handleTrackSelect(event, index) {
+            event.stopPropagation();
 
-            // Update IGV track
-            if (igvBrowser && igvBrowser.trackViews) {
-                const trackName = sessionData.tracks[trackIndex].name;
-                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
-                    const trackView = igvBrowser.trackViews[i];
-                    if (trackView.track && trackView.track.name === trackName) {
-                        trackView.track.autoscaleGroup = groupName || undefined;
-                        break;
+            if (event.shiftKey && lastClickedIndex !== null) {
+                // Range selection
+                const start = Math.min(lastClickedIndex, index);
+                const end = Math.max(lastClickedIndex, index);
+                for (let i = start; i <= end; i++) {
+                    selectedTracks.add(i);
+                }
+            } else if (event.ctrlKey || event.metaKey) {
+                // Toggle single selection
+                if (selectedTracks.has(index)) {
+                    selectedTracks.delete(index);
+                } else {
+                    selectedTracks.add(index);
+                }
+            } else {
+                // Single click on checkbox - toggle
+                if (selectedTracks.has(index)) {
+                    selectedTracks.delete(index);
+                } else {
+                    selectedTracks.add(index);
+                }
+            }
+
+            lastClickedIndex = index;
+            renderTrackControls();
+        }
+
+        function clearSelection() {
+            selectedTracks.clear();
+            lastClickedIndex = null;
+            renderTrackControls();
+        }
+
+        function updateSelectionToolbar() {
+            const toolbar = document.getElementById('selectionToolbar');
+            const countSpan = document.getElementById('selectedCount');
+            const groupSelect = document.getElementById('groupAssignSelect');
+
+            if (selectedTracks.size > 0) {
+                toolbar.classList.add('visible');
+                countSpan.textContent = selectedTracks.size;
+
+                // Update group dropdown
+                groupSelect.innerHTML = '<option value="">None (Independent)</option>';
+                sessionData.autoscaleGroups.forEach(group => {
+                    groupSelect.innerHTML += `<option value="${group}">${group}</option>`;
+                });
+            } else {
+                toolbar.classList.remove('visible');
+            }
+        }
+
+        function assignSelectedToGroup() {
+            const groupSelect = document.getElementById('groupAssignSelect');
+            const groupName = groupSelect.value || null;
+
+            selectedTracks.forEach(index => {
+                sessionData.tracks[index].autoscaleGroup = groupName;
+
+                // Update IGV track
+                if (igvBrowser && igvBrowser.trackViews) {
+                    const trackName = sessionData.tracks[index].name;
+                    for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                        const trackView = igvBrowser.trackViews[i];
+                        if (trackView.track && trackView.track.name === trackName) {
+                            trackView.track.autoscaleGroup = groupName || undefined;
+                            break;
+                        }
                     }
                 }
+            });
+
+            if (igvBrowser) {
                 igvBrowser.updateViews();
             }
 
-            updateGroupCountDisplay();
+            console.log(`Assigned ${selectedTracks.size} tracks to group: ${groupName || 'None'}`);
+            clearSelection();
             renderGroupList();
-            console.log(`Track "${sessionData.tracks[trackIndex].name}" assigned to group: ${groupName || 'None'}`);
+            updateGroupCountDisplay();
         }
 
         function addNewGroup() {
@@ -1114,7 +1234,9 @@
                     bigWigFiles: {},
                     autoscaleGroups: ['Group 1']
                 };
-                
+                selectedTracks.clear();
+                lastClickedIndex = null;
+
                 // Reset form
                 document.getElementById('genomeSelect').value = '';
                 document.getElementById('startLocation').value = '';
