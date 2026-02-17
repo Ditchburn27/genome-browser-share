@@ -12,7 +12,8 @@ A lightweight, browser-based genome browser built on [IGV.js](https://github.com
 - **Built-in Gene Annotations**: Automatic RefSeq gene tracks from UCSC/Ensembl
 - **Desktop IGV Appearance**: Familiar interface matching the desktop IGV application
 - **Customizable Tracks**: Change track names, colors, and heights on the fly
-- **Group Autoscaling**: Scale multiple tracks together for easy comparison
+- **Drag-to-Reorder Tracks**: Rearrange track order via drag handle in the settings table, synced to the browser view
+- **Autoscale Groups**: Create named groups and assign tracks via shift-click multi-select for shared Y-axis scaling
 - **Zero Installation**: Runs entirely in the browser - no backend required
 
 ## 🚀 Quick Start
@@ -40,20 +41,23 @@ The `config.json` file stores all your session settings:
 {
   "genome": "hg38",
   "region": "chr17:7,661,779-7,687,550",
+  "autoscaleGroups": ["Group 1"],
   "tracks": [
     {
       "name": "Sample_1_H4K20me1",
       "file": "sample1.bigWig",
       "color": "#FF0000",
       "type": "wig",
-      "format": "bigwig"
+      "format": "bigwig",
+      "autoscaleGroup": "Group 1"
     },
     {
       "name": "Sample_2_Control",
       "file": "sample2.bigWig",
       "color": "#00AA00",
       "type": "wig",
-      "format": "bigwig"
+      "format": "bigwig",
+      "autoscaleGroup": null
     }
   ]
 }
@@ -63,12 +67,14 @@ The `config.json` file stores all your session settings:
 
 - **genome**: Reference genome (hg38, hg19, mm10, mm39)
 - **region**: Genomic coordinates (e.g., "chr17:7,661,779-7,687,550")
-- **tracks**: Array of track configurations
+- **autoscaleGroups**: Array of named autoscale group strings
+- **tracks**: Array of track configurations (order determines display order)
   - **name**: Display name for the track
   - **file**: BigWig filename (no path, just filename)
   - **color**: Hex color code for the track
   - **type**: Track type (always "wig" for BigWig)
   - **format**: File format (always "bigwig")
+  - **autoscaleGroup**: Name of the autoscale group, or `null` for independent scaling
 
 ## 🎨 Using the Browser
 
@@ -84,7 +90,16 @@ The `config.json` file stores all your session settings:
 - **Change Colors**: Click the color picker next to any track in the "Track Settings" panel
 - **Rename Tracks**: Click the track name to edit it inline
 - **Adjust Height**: Use the "Track Height" dropdown to make tracks more compact or taller
-- **Group Autoscale**: Toggle to scale all tracks together or independently
+- **Reorder Tracks**: Drag the handle (☰) on any track row to rearrange the display order — both the settings table and the IGV browser view update to match
+
+### Autoscale Groups
+
+Tracks in the same autoscale group share a common Y-axis scale, making it easy to compare signal levels across samples.
+
+1. **Select tracks**: Click checkboxes to select individual tracks, or **shift-click** to select a range
+2. **Assign a group**: Use the toolbar dropdown to pick a group, then click "Set Group"
+3. **Manage groups**: Add, rename, or remove groups in the "Autoscale Groups" section below the track list
+4. **Independent scaling**: Set a track's group to "None (Independent)" for its own Y-axis range
 
 ### Exporting
 
@@ -210,7 +225,6 @@ Contributions are welcome! Some ideas for improvements:
 - BAM/CRAM file support
 - BED track visualization
 - Session state URL encoding
-- Batch track color assignment
 
 ## 🙏 Acknowledgments
 
