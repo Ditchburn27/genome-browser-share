@@ -1030,47 +1030,24 @@
         function syncIGVTrackOrder() {
             if (!igvBrowser || !igvBrowser.trackViews) return;
 
-            // Build a set of our track names for identification
+            // Build a name->trackView lookup for our data tracks
             const ourTrackNames = new Set(sessionData.tracks.map(t => t.name));
 
-            // Separate system tracks (ruler, genes, etc.) from our data tracks
-            const systemTrackViews = [];
-            const dataTrackViewsByName = {};
-            igvBrowser.trackViews.forEach(tv => {
-                if (tv.track && ourTrackNames.has(tv.track.name)) {
-                    dataTrackViewsByName[tv.track.name] = tv;
-                } else {
-                    systemTrackViews.push(tv);
+            // Assign track.order values so our data tracks follow sessionData order.
+            // System tracks (ruler, ideogram, genes) keep their existing low order values.
+            // Our data tracks get order values starting at 1000, spaced by index.
+            sessionData.tracks.forEach((track, i) => {
+                for (const tv of igvBrowser.trackViews) {
+                    if (tv.track && tv.track.name === track.name) {
+                        tv.track.order = 1000 + i;
+                        break;
+                    }
                 }
             });
 
-            // Rebuild data tracks in sessionData.tracks order
-            const orderedDataTrackViews = [];
-            sessionData.tracks.forEach(track => {
-                const tv = dataTrackViewsByName[track.name];
-                if (tv) {
-                    orderedDataTrackViews.push(tv);
-                }
-            });
-
-            // Rebuild the trackViews array
-            igvBrowser.trackViews = [...systemTrackViews, ...orderedDataTrackViews];
-
-            // Reorder the DOM nodes to match
-            // Find the common parent container for track divs
-            const firstTV = igvBrowser.trackViews[0];
-            if (!firstTV) return;
-
-            // IGV.js uses columnContainer or trackDiv depending on version
-            const containerDiv = firstTV.trackDiv ? firstTV.trackDiv.parentElement : null;
-            if (!containerDiv) return;
-
-            // Re-append all track divs in the new order — appendChild moves existing nodes
-            igvBrowser.trackViews.forEach(tv => {
-                if (tv.trackDiv) {
-                    containerDiv.appendChild(tv.trackDiv);
-                }
-            });
+            // Use IGV's built-in reorder which sorts by track.order
+            // and correctly re-attaches all column DOM elements
+            igvBrowser.reorderTracks();
         }
 
         async function updateTrackColor(index, color) {
