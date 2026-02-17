@@ -412,6 +412,30 @@
             background: #c8e6c9;
             color: #2e7d32;
         }
+
+        .drag-handle {
+            cursor: grab;
+            color: #999;
+            user-select: none;
+            font-size: 14px;
+            padding: 0 2px;
+        }
+
+        .drag-handle:hover {
+            color: #555;
+        }
+
+        .track-item.dragging {
+            opacity: 0.4;
+        }
+
+        .track-item.drag-over-above {
+            border-top: 2px solid #4a90e2;
+        }
+
+        .track-item.drag-over-below {
+            border-bottom: 2px solid #4a90e2;
+        }
     </style>
 </head>
 <body>
@@ -587,6 +611,7 @@
         };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
+        let dragSourceIndex = null;
 
         // Initialize drag and drop
         const dropZone = document.getElementById('dropZone');
@@ -861,12 +886,14 @@
                 const trackDiv = document.createElement('div');
                 trackDiv.className = 'track-item' + (selectedTracks.has(index) ? ' selected' : '');
                 trackDiv.dataset.index = index;
+                trackDiv.draggable = false;
 
                 const groupBadge = track.autoscaleGroup
                     ? `<span class="track-group-badge has-group">${track.autoscaleGroup}</span>`
                     : `<span class="track-group-badge">Independent</span>`;
 
                 trackDiv.innerHTML = `
+                    <span class="drag-handle" title="Drag to reorder">&#9776;</span>
                     <input type="checkbox"
                            ${selectedTracks.has(index) ? 'checked' : ''}
                            onclick="handleTrackSelect(event, ${index})"
@@ -886,10 +913,152 @@
                     ${groupBadge}
                 `;
 
+                // Only allow drag from the handle
+                const handle = trackDiv.querySelector('.drag-handle');
+                handle.addEventListener('mousedown', () => {
+                    trackDiv.draggable = true;
+                });
+
+                trackDiv.addEventListener('dragstart', handleTrackDragStart);
+                trackDiv.addEventListener('dragover', handleTrackDragOver);
+                trackDiv.addEventListener('dragleave', handleTrackDragLeave);
+                trackDiv.addEventListener('drop', handleTrackDrop);
+                trackDiv.addEventListener('dragend', handleTrackDragEnd);
+
                 trackList.appendChild(trackDiv);
             });
 
             updateSelectionToolbar();
+        }
+
+        function handleTrackDragStart(e) {
+            dragSourceIndex = parseInt(e.currentTarget.dataset.index);
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', dragSourceIndex);
+        }
+
+        function handleTrackDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const target = e.currentTarget;
+            target.classList.remove('drag-over-above', 'drag-over-below');
+            const rect = target.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (e.clientY < midpoint) {
+                target.classList.add('drag-over-above');
+            } else {
+                target.classList.add('drag-over-below');
+            }
+        }
+
+        function handleTrackDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over-above', 'drag-over-below');
+        }
+
+        function handleTrackDrop(e) {
+            e.preventDefault();
+            const target = e.currentTarget;
+            target.classList.remove('drag-over-above', 'drag-over-below');
+            const toIndex = parseInt(target.dataset.index);
+            if (dragSourceIndex === null || dragSourceIndex === toIndex) return;
+
+            const rect = target.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            let insertIndex = e.clientY < midpoint ? toIndex : toIndex + 1;
+
+            // Adjust for the fact that removing the source shifts indices
+            if (dragSourceIndex < insertIndex) {
+                insertIndex--;
+            }
+
+            if (dragSourceIndex !== insertIndex) {
+                reorderTrack(dragSourceIndex, insertIndex);
+            }
+        }
+
+        function handleTrackDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            e.currentTarget.draggable = false;
+            dragSourceIndex = null;
+            // Clean up any lingering indicator classes
+            document.querySelectorAll('.track-item').forEach(el => {
+                el.classList.remove('drag-over-above', 'drag-over-below');
+            });
+        }
+
+        function reorderTrack(fromIndex, toIndex) {
+            // Reorder sessionData.tracks
+            const [movedTrack] = sessionData.tracks.splice(fromIndex, 1);
+            sessionData.tracks.splice(toIndex, 0, movedTrack);
+
+            // Remap selectedTracks indices
+            const newSelected = new Set();
+            selectedTracks.forEach(idx => {
+                if (idx === fromIndex) {
+                    newSelected.add(toIndex);
+                } else {
+                    let newIdx = idx;
+                    if (idx > fromIndex) newIdx--;
+                    if (newIdx >= toIndex) newIdx++;
+                    newSelected.add(newIdx);
+                }
+            });
+            selectedTracks = newSelected;
+
+            // Remap lastClickedIndex
+            if (lastClickedIndex !== null) {
+                if (lastClickedIndex === fromIndex) {
+                    lastClickedIndex = toIndex;
+                } else {
+                    if (lastClickedIndex > fromIndex) lastClickedIndex--;
+                    if (lastClickedIndex >= toIndex) lastClickedIndex++;
+                }
+            }
+
+            // Sync IGV browser view
+            reorderIGVTrack();
+
+            // Re-render track controls
+            renderTrackControls();
+        }
+
+        function reorderIGVTrack() {
+            if (!igvBrowser || !igvBrowser.trackViews) return;
+
+            // Separate system tracks from data (wig) tracks
+            const systemTracks = [];
+            const wigTrackViews = [];
+            igvBrowser.trackViews.forEach(tv => {
+                if (tv.track && tv.track.type === 'wig') {
+                    wigTrackViews.push(tv);
+                } else {
+                    systemTracks.push(tv);
+                }
+            });
+
+            // Build name -> trackView map
+            const nameToTV = {};
+            wigTrackViews.forEach(tv => {
+                nameToTV[tv.track.name] = tv;
+            });
+
+            // Rebuild in sessionData.tracks order
+            const reorderedWig = [];
+            sessionData.tracks.forEach(track => {
+                if (nameToTV[track.name]) {
+                    reorderedWig.push(nameToTV[track.name]);
+                }
+            });
+
+            // Rebuild trackViews array
+            igvBrowser.trackViews = [...systemTracks, ...reorderedWig];
+
+            // Reorder DOM
+            const trackContainer = igvBrowser.trackViews[0].trackDiv.parentElement;
+            // Append system tracks first, then reordered wig tracks
+            systemTracks.forEach(tv => trackContainer.appendChild(tv.trackDiv));
+            reorderedWig.forEach(tv => trackContainer.appendChild(tv.trackDiv));
         }
 
         async function updateTrackColor(index, color) {
