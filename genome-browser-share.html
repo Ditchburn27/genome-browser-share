@@ -583,7 +583,7 @@
             locus: null,
             tracks: [],
             bigWigFiles: {},
-            autoscaleGroups: ['Group 1']
+            autoscaleGroups: []
         };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
@@ -699,13 +699,13 @@
 
                     sessionData.genome = config.genome || 'hg38';
                     sessionData.locus = config.region || null;
-                    sessionData.autoscaleGroups = config.autoscaleGroups || ['Group 1'];
+                    sessionData.autoscaleGroups = config.autoscaleGroups || [];
 
                     if (config.tracks) {
-                        // Preserve autoscaleGroup from config, default to 'Group 1' for backward compatibility
+                        // Preserve autoscaleGroup from config, default to independent scaling
                         sessionData.tracks = config.tracks.map(t => ({
                             ...t,
-                            autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : 'Group 1'
+                            autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : null
                         }));
                     } else {
                         // Create default tracks
@@ -716,7 +716,7 @@
                 } else {
                     // No config - use defaults
                     sessionData.genome = 'hg38';
-                    sessionData.autoscaleGroups = ['Group 1'];
+                    sessionData.autoscaleGroups = [];
                     sessionData.tracks = createDefaultTracks(bigWigFiles);
 
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded! Launching browser with default settings...</div>';
@@ -741,7 +741,7 @@
                 color: colors[i % colors.length],
                 type: 'wig',
                 format: 'bigwig',
-                autoscaleGroup: 'Group 1'
+                autoscaleGroup: null
             }));
         }
 
