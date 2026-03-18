@@ -456,7 +456,7 @@
                 
                 <div class="section">
                     <h3>📁 Drop Session Folder or Select Files</h3>
-                    <p>Upload a folder containing config.json and BigWig files, or select them individually.</p>
+                    <p>Upload a folder containing config.json and BigWig/BED files, or select them individually.</p>
                     
                     <div class="file-drop-zone" id="dropZone">
                         <div class="drop-icon">📂</div>
@@ -469,7 +469,7 @@
                     </div>
 
                     <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.json" style="display: none;">
+                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.json" style="display: none;">
                     
                     <div class="button-group" style="margin-top: 15px;">
                         <button onclick="document.getElementById('folderInput').click()" class="secondary">
@@ -511,10 +511,10 @@
                     </div>
 
                     <div class="form-group">
-                        <label>BigWig Files *</label>
-                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig">
+                        <label>Track Files *</label>
+                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig,.bed">
                         <p style="font-size: 11px; color: #666; margin-top: 4px;">
-                            Select one or more BigWig files (.bw, .bigWig)
+                            Select one or more BigWig files (.bw, .bigWig) or BED files (.bed)
                         </p>
                     </div>
 
@@ -683,18 +683,21 @@
             try {
                 let configFile = null;
                 const bigWigFiles = [];
-                
-                // Separate config and BigWig files
+                const bedFiles = [];
+
+                // Separate config, BigWig, and BED files
                 for (const file of files) {
                     if (file.name === 'config.json') {
                         configFile = file;
                     } else if (file.name.match(/\.(bw|bigwig|bigWig)$/i)) {
                         bigWigFiles.push(file);
+                    } else if (file.name.match(/\.bed$/i)) {
+                        bedFiles.push(file);
                     }
                 }
-                
-                if (bigWigFiles.length === 0) {
-                    statusDiv.innerHTML = '<div class="status-message status-error">❌ No BigWig files found. Please upload .bw or .bigWig files.</div>';
+
+                if (bigWigFiles.length === 0 && bedFiles.length === 0) {
+                    statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload .bw, .bigWig, or .bed files.</div>';
                     return;
                 }
 
@@ -706,11 +709,17 @@
                 bigWigFiles.forEach(f => {
                     fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`;
                 });
+                bedFiles.forEach(f => {
+                    fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`;
+                });
                 fileListDiv.classList.remove('hidden');
 
-                // Store BigWig files
+                // Store all track files in the same map
                 sessionData.bigWigFiles = {};
                 for (const file of bigWigFiles) {
+                    sessionData.bigWigFiles[file.name] = file;
+                }
+                for (const file of bedFiles) {
                     sessionData.bigWigFiles[file.name] = file;
                 }
 
@@ -731,7 +740,7 @@
                         }));
                     } else {
                         // Create default tracks
-                        sessionData.tracks = createDefaultTracks(bigWigFiles);
+                        sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     }
 
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
@@ -739,7 +748,7 @@
                     // No config - use defaults
                     sessionData.genome = 'hg38';
                     sessionData.autoscaleGroups = [];
-                    sessionData.tracks = createDefaultTracks(bigWigFiles);
+                    sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
 
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded! Launching browser with default settings...</div>';
                 }
@@ -756,15 +765,32 @@
         }
 
         function createDefaultTracks(files) {
-            const colors = ['#FF0000', '#00AA00', '#0000FF', '#FF8800', '#8800FF', '#00CCCC'];
-            return files.map((file, i) => ({
-                name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''),
-                file: file.name,
-                color: colors[i % colors.length],
-                type: 'wig',
-                format: 'bigwig',
-                autoscaleGroup: null
-            }));
+            const wigColors = ['#FF0000', '#00AA00', '#0000FF', '#FF8800', '#8800FF', '#00CCCC'];
+            const bedColors = ['#5566AA', '#AA6655', '#55AA66', '#9955AA', '#AA9955', '#559999'];
+            let wigCount = 0;
+            let bedCount = 0;
+            return files.map(file => {
+                const isBed = /\.bed$/i.test(file.name);
+                if (isBed) {
+                    return {
+                        name: file.name.replace(/\.bed$/i, ''),
+                        file: file.name,
+                        color: bedColors[bedCount++ % bedColors.length],
+                        type: 'annotation',
+                        format: 'bed',
+                        autoscaleGroup: null
+                    };
+                } else {
+                    return {
+                        name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''),
+                        file: file.name,
+                        color: wigColors[wigCount++ % wigColors.length],
+                        type: 'wig',
+                        format: 'bigwig',
+                        autoscaleGroup: null
+                    };
+                }
+            });
         }
 
         async function createNewSession() {
@@ -844,17 +870,23 @@
                 const track = sessionData.tracks[i];
                 const file = sessionData.bigWigFiles[track.file];
                 if (file) {
-                    igvOptions.tracks.push({
+                    const isBed = track.format === 'bed';
+                    const igvTrack = {
                         name: track.name,
-                        type: 'wig',
-                        format: 'bigwig',
+                        type: isBed ? 'annotation' : 'wig',
+                        format: isBed ? 'bed' : 'bigwig',
                         url: URL.createObjectURL(file),
                         color: track.color,
-                        height: 50,
-                        autoscale: true,
-                        autoscaleGroup: track.autoscaleGroup || undefined,
-                        min: 0
-                    });
+                        height: 50
+                    };
+                    if (isBed) {
+                        igvTrack.displayMode = 'COLLAPSED';
+                    } else {
+                        igvTrack.autoscale = true;
+                        igvTrack.autoscaleGroup = track.autoscaleGroup || undefined;
+                        igvTrack.min = 0;
+                    }
+                    igvOptions.tracks.push(igvTrack);
                     // Store which track index in our array maps to which IGV track
                     // IGV adds a ruler/sequence track at index 0, then genes, then our tracks
                     sessionData.trackViewIndices.push(i);
@@ -1328,7 +1360,7 @@
         function saveSessionConfig() {
             const config = {
                 genome: sessionData.genome,
-                region: igvBrowser ? igvBrowser.currentLoci()[0] : sessionData.locus,
+                region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus,
                 autoscaleGroups: sessionData.autoscaleGroups,
                 tracks: sessionData.tracks.map(t => ({
                     name: t.name,
@@ -1361,7 +1393,8 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                const locus = igvBrowser.currentLoci()[0].replace(/:/g, '_').replace(/,/g, '');
+                const lociResult = igvBrowser.currentLoci();
+                const locus = (Array.isArray(lociResult) ? lociResult[0] : lociResult).replace(/:/g, '_').replace(/,/g, '');
                 a.download = `igv_view_${locus}.svg`;
                 document.body.appendChild(a);
                 a.click();
@@ -1409,6 +1442,44 @@
                 document.getElementById('igvContainer').innerHTML = '';
             }
         }
+        // Arrow key navigation for the IGV browser
+        document.addEventListener('keydown', function(e) {
+            if (!igvBrowser) return;
+            if (document.getElementById('browserView').classList.contains('active') === false) return;
+
+            // Don't intercept arrow keys when user is typing in an input/textarea
+            const tag = document.activeElement && document.activeElement.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || document.activeElement.isContentEditable) return;
+
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+
+            const lociResult = igvBrowser.currentLoci();
+            if (!lociResult) return;
+            const locusStr = Array.isArray(lociResult) ? lociResult[0] : lociResult;
+            if (!locusStr) return;
+
+            // Parse locus string e.g. "chr17:7661779-7687550"
+            const match = locusStr.match(/^([^:]+):(\d[\d,]*)-(\d[\d,]*)$/);
+            if (!match) return;
+
+            const chrom = match[1];
+            const start = parseInt(match[2].replace(/,/g, ''));
+            const end = parseInt(match[3].replace(/,/g, ''));
+            const span = end - start;
+            const shift = Math.round(span * 0.2);
+
+            let newStart, newEnd;
+            if (e.key === 'ArrowLeft') {
+                newStart = Math.max(0, start - shift);
+                newEnd = newStart + span;
+            } else {
+                newStart = start + shift;
+                newEnd = end + shift;
+            }
+
+            igvBrowser.search(`${chrom}:${newStart}-${newEnd}`);
+        }, true);
     </script>
 </body>
 </html>
