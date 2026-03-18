@@ -898,6 +898,29 @@
                 igvBrowser = await igv.createBrowser(document.getElementById('igvContainer'), igvOptions);
                 console.log('IGV Browser created successfully');
                 console.log('Track views:', igvBrowser.trackViews.length);
+                // Restore focus after IGV canvas drag/zoom so arrow keys keep working
+                let igvDragged = false;
+                const igvEl = document.getElementById('igvContainer');
+                igvEl.addEventListener('mousedown', function() { igvDragged = false; });
+                igvEl.addEventListener('mousemove', function(e) { if (e.buttons > 0) igvDragged = true; });
+                igvEl.addEventListener('mouseup', function() {
+                    if (igvDragged) {
+                        setTimeout(function() {
+                            if (document.activeElement && document.activeElement !== document.body) {
+                                document.activeElement.blur();
+                            }
+                        }, 0);
+                    }
+                    igvDragged = false;
+                });
+                igvEl.addEventListener('wheel', function() {
+                    setTimeout(function() {
+                        if (document.activeElement && document.activeElement !== document.body) {
+                            document.activeElement.blur();
+                        }
+                    }, 0);
+                }, { passive: true });
+
                 renderTrackControls();
                 renderGroupList();
                 updateGroupCountDisplay();
@@ -946,11 +969,10 @@
                 const handle = trackDiv.querySelector('.drag-handle');
                 handle.addEventListener('mousedown', () => {
                     trackDiv.draggable = true;
+                    document.addEventListener('mouseup', () => {
+                        trackDiv.draggable = false;
+                    }, { once: true });
                 });
-                // Reset draggable on mouseup so normal interactions work
-                document.addEventListener('mouseup', () => {
-                    trackDiv.draggable = false;
-                }, { once: false });
 
                 trackDiv.addEventListener('dragstart', handleTrackDragStart);
                 trackDiv.addEventListener('dragover', handleTrackDragOver);
@@ -1443,29 +1465,67 @@
             }
         }
         // Arrow key navigation for the IGV browser
-        document.addEventListener('keydown', function(e) {
+        window.addEventListener('keydown', function(e) {
             if (!igvBrowser) return;
             if (document.getElementById('browserView').classList.contains('active') === false) return;
-
-            // Don't intercept arrow keys when user is typing in an input/textarea
-            const tag = document.activeElement && document.activeElement.tagName.toLowerCase();
-            if (tag === 'input' || tag === 'textarea' || document.activeElement.isContentEditable) return;
-
             if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+            // Don't intercept when user is typing in our app's text inputs
+            const active = document.activeElement;
+            if (active) {
+                const tag = active.tagName.toLowerCase();
+                if (tag === 'select') return;
+                if (tag === 'input' || tag === 'textarea' || active.isContentEditable) {
+                    if (active.closest('#trackControls')) return; // Our UI inputs — protect them
+                    // IGV-internal or other input (likely focused as side-effect) — blur and navigate
+                    active.blur();
+                }
+            }
+
             e.preventDefault();
 
+            // Primary approach: use referenceFrameList for raw numeric coordinates
+            // This avoids string parsing issues with currentLoci() after drag/zoom
+            const rf = igvBrowser.referenceFrameList && igvBrowser.referenceFrameList[0];
+            if (rf && rf.chr && typeof rf.start === 'number') {
+                const chr = rf.chr;
+                const start = Math.floor(rf.start);
+                const bpPerPixel = rf.bpPerPixel;
+                const viewportWidth = igvBrowser.trackViews[0]
+                    ? igvBrowser.trackViews[0].viewports[0].$viewport.width()
+                    : document.getElementById('igvContainer').clientWidth;
+                const end = Math.floor(rf.start + (bpPerPixel * viewportWidth));
+                const span = end - start;
+                const shift = Math.round(span * 0.2);
+
+                let newStart, newEnd;
+                if (e.key === 'ArrowLeft') {
+                    newStart = Math.max(0, start - shift);
+                    newEnd = newStart + span;
+                } else {
+                    newStart = start + shift;
+                    newEnd = end + shift;
+                }
+
+                igvBrowser.search(chr + ':' + newStart + '-' + newEnd);
+                return;
+            }
+
+            // Fallback: parse currentLoci() with permissive regex (handles decimals, spaces)
             const lociResult = igvBrowser.currentLoci();
             if (!lociResult) return;
             const locusStr = Array.isArray(lociResult) ? lociResult[0] : lociResult;
             if (!locusStr) return;
 
-            // Parse locus string e.g. "chr17:7661779-7687550"
-            const match = locusStr.match(/^([^:]+):(\d[\d,]*)-(\d[\d,]*)$/);
-            if (!match) return;
+            const match = locusStr.match(/^([^:]+):\s*([\d,._]+)\s*-\s*([\d,._]+)\s*$/);
+            if (!match) {
+                console.warn('Arrow nav: could not parse locus string:', locusStr);
+                return;
+            }
 
             const chrom = match[1];
-            const start = parseInt(match[2].replace(/,/g, ''));
-            const end = parseInt(match[3].replace(/,/g, ''));
+            const start = Math.floor(parseFloat(match[2].replace(/[,_]/g, '')));
+            const end = Math.floor(parseFloat(match[3].replace(/[,_]/g, '')));
             const span = end - start;
             const shift = Math.round(span * 0.2);
 
@@ -1478,7 +1538,7 @@
                 newEnd = end + shift;
             }
 
-            igvBrowser.search(`${chrom}:${newStart}-${newEnd}`);
+            igvBrowser.search(chrom + ':' + newStart + '-' + newEnd);
         }, true);
     </script>
 </body>
