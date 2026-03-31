@@ -337,6 +337,8 @@ Contributions are welcome! Some ideas for improvements:
 - Additional genome assemblies
 - BAM/CRAM file support
 - Session state URL encoding
+- Ability to add additional tracks to an open browser session without reloading
+- Ability to hide/show tracks without removing them from the session
 
 ## 🙏 Acknowledgments
 
