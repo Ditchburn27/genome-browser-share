@@ -14,6 +14,7 @@ A lightweight, browser-based genome browser built on [IGV.js](https://github.com
 - **Customizable Tracks**: Change track names, colors, and heights on the fly
 - **Drag-to-Reorder Tracks**: Rearrange track order via drag handle in the settings table, synced to the browser view
 - **Autoscale Groups**: Create named groups and assign tracks via shift-click multi-select for shared Y-axis scaling
+- **BED Annotation Tracks**: Load BED files (`.bed`) alongside BigWig files as annotation tracks
 - **Zero Installation**: Runs entirely in the browser - no backend required
 
 ## 🚀 Quick Start
@@ -23,7 +24,7 @@ A lightweight, browser-based genome browser built on [IGV.js](https://github.com
 1. Open `genome-browser-share.html` in your web browser
 2. Drag and drop a folder containing:
    - `config.json` (session configuration)
-   - One or more BigWig files (`.bw`, `.bigWig`)
+   - One or more BigWig files (`.bw`, `.bigWig`) and/or BED annotation files (`.bed`)
 3. The browser launches automatically with all your settings preserved
 
 ### Option 2: Create New Session
@@ -84,6 +85,7 @@ The `config.json` file stores all your session settings:
 - **Zoom In/Out**: Zoom buttons or use the zoom slider in IGV
 - **Reset**: Return to the starting location
 - **Pan**: Click and drag in the track view
+- **Keyboard Pan**: Left/right arrow keys pan the view left or right
 
 ### Track Customization
 
@@ -139,12 +141,123 @@ Recipients simply:
 
 ## 🔧 Supported Genomes
 
+### Built-in Genomes
+
 - **hg38** (GRCh38): Human genome, December 2013
 - **hg19** (GRCh37): Human genome, February 2009
 - **mm10** (GRCm38): Mouse genome, December 2011
 - **mm39** (GRCm39): Mouse genome, June 2020
 
 Gene annotations are automatically loaded from UCSC/Ensembl for each genome.
+
+In addition to these four presets, you can add your own custom genome references for any organism or assembly. See the section below for details.
+
+## 🧬 Custom Genome References
+
+You can use any genome assembly by providing your own FASTA reference files. Custom genomes appear in the genome dropdown alongside the built-in presets.
+
+### Directory Structure
+
+Place each custom genome in its own subdirectory under `references/`:
+
+```
+references/
+├── manifest.js              (auto-generated, do not edit manually)
+├── update_manifest.sh       (script to regenerate manifest.js)
+├── sacCer3/
+│   ├── sacCer3.fa           (FASTA reference - required)
+│   ├── sacCer3.fa.fai       (FASTA index - recommended)
+│   └── sacCer3.gtf          (gene annotations - optional)
+└── dm6/
+    ├── dm6.fasta             (FASTA reference - required)
+    ├── dm6.fasta.fai         (FASTA index - recommended)
+    └── dm6.gff3              (gene annotations - optional)
+```
+
+Each subdirectory needs:
+- **FASTA file** (`.fa`, `.fasta`, `.fna`) - **required**. The genome sequence.
+- **FASTA index** (`.fai`) - recommended for large genomes. Speeds up loading significantly. Generate one with `samtools faidx your_genome.fa`.
+- **GTF/GFF annotation file** (`.gtf`, `.gff`, `.gff3`) - optional. Provides gene annotations in the browser view.
+
+### Generating the Manifest
+
+After adding or removing reference directories, run:
+
+```bash
+./references/update_manifest.sh
+```
+
+This scans the subdirectories under `references/`, detects the FASTA, index, and annotation files in each one, and updates `references/manifest.js`. The manifest is what populates the genome dropdown in the UI, so you must re-run this script whenever you change the contents of `references/`.
+
+Additional notes:
+- The manifest must be regenerated whenever you add or remove reference directories — changes are not picked up automatically
+- Compressed files are supported: `.fa.gz`, `.fasta.gz`, `.gtf.gz`, `.gff.gz` (with a corresponding `.fai` or `.gzi` index)
+- If a subdirectory has no FASTA file, it is skipped with a warning and will not appear in the dropdown
+
+### Using Custom Genomes
+
+There are two workflows for using a custom genome:
+
+**Create New Session:**
+1. Open `genome-browser-share.html`
+2. Select your custom genome from the dropdown (it appears alongside hg38, hg19, etc.)
+3. Upload your BigWig or other track files
+4. Click "Launch Browser"
+
+**Load Existing Session:**
+1. Drag and drop a folder containing:
+   - `config.json` (with the custom genome name in the `"genome"` field)
+   - Your track files (BigWig, BED, etc.)
+   - The reference files (FASTA, FAI, GTF/GFF) for the custom genome
+2. The browser detects the reference files and loads them automatically
+
+### Sharing Sessions with Custom Genomes
+
+There are two approaches for sharing sessions that use a custom genome:
+
+**Option A — Include reference files in the folder (works everywhere):**
+
+Put `config.json`, all track files, and the reference files (FASTA, FAI, GTF/GFF) together in one folder:
+
+```
+shared_session/
+├── config.json
+├── sample1.bigWig
+├── sample2.bigWig
+├── sacCer3.fa
+├── sacCer3.fa.fai
+└── sacCer3.gtf
+```
+
+The recipient drag-drops the entire folder and it works on both file:// and HTTP — no prior setup needed. This is the simplest approach and works for any collaborator.
+
+**Option B — Manifest-based sharing (no reference files needed):**
+
+If the recipient already has the same genome registered in their `references/` directory, you only need to share `config.json` and the track files — no FASTA required.
+
+Requirements for this to work on the recipient's side:
+- The genome must be present in their `references/<name>/` directory
+- They must have run `./references/update_manifest.sh` to register it in the manifest
+- They must serve the app via HTTP (`python -m http.server 8000`) and open `http://localhost:8000/genome-browser-share.html` — not open the HTML file directly
+- If they do open the file directly (file:// protocol), an inline file picker will appear asking them to select the reference files manually
+
+### HTTP Server vs File Protocol
+
+**HTTP server (recommended for custom genomes):**
+
+```bash
+python -m http.server 8000
+```
+
+Then open `http://localhost:8000/genome-browser-share.html` in your browser. On HTTP, any genome registered in `references/manifest.js` loads automatically from its declared paths — no reference files need to be included in the shared session folder. This is the recommended approach for teams that regularly share sessions using custom genomes.
+
+**File protocol (opening the HTML file directly):**
+
+When you open `genome-browser-share.html` directly from disk (a `file://` URL), the browser blocks access to other local files for security reasons. In this case, reference files cannot be loaded from the `references/` directory automatically. Instead, either:
+- Include the reference files (FASTA, FAI, GTF/GFF) in the same folder you drag-drop into the app (Option A above), or
+- A file picker will appear automatically when a custom genome is detected, letting you select the reference files manually
+
+For teams sharing custom genomes regularly, using an HTTP server avoids these limitations entirely.
 
 ## 💡 Tips & Best Practices
 
@@ -223,7 +336,6 @@ MIT License - Feel free to use and modify for your research.
 Contributions are welcome! Some ideas for improvements:
 - Additional genome assemblies
 - BAM/CRAM file support
-- BED track visualization
 - Session state URL encoding
 
 ## 🙏 Acknowledgments

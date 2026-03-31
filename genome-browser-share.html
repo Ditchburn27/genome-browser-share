@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IGV Genome Browser</title>
     <script src="https://cdn.jsdelivr.net/npm/igv@2.15.8/dist/igv.min.js"></script>
+    <script>var CUSTOM_GENOMES = {};</script>
+    <script src="references/manifest.js"></script>
     <style>
         * {
             margin: 0;
@@ -469,7 +471,7 @@
                     </div>
 
                     <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.json" style="display: none;">
+                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.json,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3" style="display: none;">
                     
                     <div class="button-group" style="margin-top: 15px;">
                         <button onclick="document.getElementById('folderInput').click()" class="secondary">
@@ -493,13 +495,22 @@
                 <div class="section">
                     <div class="form-group">
                         <label>Reference Genome *</label>
-                        <select id="genomeSelect">
+                        <select id="genomeSelect" onchange="onGenomeSelectChange()">
                             <option value="">Select genome...</option>
                             <option value="hg38">Human (GRCh38/hg38)</option>
                             <option value="hg19">Human (GRCh37/hg19)</option>
                             <option value="mm10">Mouse (GRCm38/mm10)</option>
                             <option value="mm39">Mouse (GRCm39/mm39)</option>
                         </select>
+                    </div>
+
+                    <div id="customRefSection" class="form-group" style="display: none;">
+                        <label>Reference Files</label>
+                        <input type="file" id="referenceFileInput" multiple accept=".fa,.fasta,.fna,.fai,.gtf,.gff,.gff3">
+                        <p style="font-size: 11px; color: #666; margin-top: 4px;">
+                            Select FASTA (.fa/.fasta/.fna), optional index (.fai), and optional annotation (.gtf/.gff) files.<br>
+                            <em>Only needed when opening this file directly (file:// protocol). When using an HTTP server, reference files load automatically.</em>
+                        </p>
                     </div>
 
                     <div class="form-group">
@@ -512,7 +523,7 @@
 
                     <div class="form-group">
                         <label>Track Files *</label>
-                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig,.bed">
+                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3">
                         <p style="font-size: 11px; color: #666; margin-top: 4px;">
                             Select one or more BigWig files (.bw, .bigWig) or BED files (.bed)
                         </p>
@@ -604,11 +615,165 @@
             locus: null,
             tracks: [],
             bigWigFiles: {},
-            autoscaleGroups: []
+            autoscaleGroups: [],
+            referenceFiles: null
         };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
         let dragSourceIndex = null;
+
+        // Custom genome helpers
+        function isCustomGenome(id) {
+            return id && id.startsWith('custom:');
+        }
+
+        function getCustomGenomeId(id) {
+            return id ? id.replace('custom:', '') : '';
+        }
+
+        function populateGenomeDropdown() {
+            const select = document.getElementById('genomeSelect');
+            if (typeof CUSTOM_GENOMES === 'object' && Object.keys(CUSTOM_GENOMES).length > 0) {
+                const group = document.createElement('optgroup');
+                group.label = 'Custom Genomes';
+                for (const [id, genome] of Object.entries(CUSTOM_GENOMES)) {
+                    const opt = document.createElement('option');
+                    opt.value = 'custom:' + id;
+                    opt.textContent = genome.label || id;
+                    group.appendChild(opt);
+                }
+                select.appendChild(group);
+            }
+        }
+
+        function onGenomeSelectChange() {
+            const select = document.getElementById('genomeSelect');
+            const isCustom = isCustomGenome(select.value);
+            const isFileProtocol = window.location.protocol === 'file:';
+            document.getElementById('customRefSection').style.display =
+                (isCustom && isFileProtocol) ? 'block' : 'none';
+        }
+
+        async function buildReferenceConfig(genomeId) {
+            const id = getCustomGenomeId(genomeId);
+            const genome = CUSTOM_GENOMES[id];
+            const isFileProtocol = window.location.protocol === 'file:';
+
+            let reference = {};
+            let annotationTrack = null;
+
+            if (sessionData.referenceFiles) {
+                // Locally-provided files (drag-drop or file picker) — highest priority, works everywhere
+                reference.fastaURL = URL.createObjectURL(sessionData.referenceFiles.fasta);
+                if (sessionData.referenceFiles.index) {
+                    reference.indexURL = URL.createObjectURL(sessionData.referenceFiles.index);
+                }
+                if (sessionData.referenceFiles.annotation) {
+                    annotationTrack = {
+                        name: 'Gene Annotations',
+                        type: 'annotation',
+                        format: sessionData.referenceFiles.annotationFormat || 'gtf',
+                        url: URL.createObjectURL(sessionData.referenceFiles.annotation),
+                        displayMode: 'COLLAPSED',
+                        height: 100
+                    };
+                }
+            } else if (genome && !isFileProtocol) {
+                // HTTP mode: use relative paths from manifest (no local files needed)
+                reference.fastaURL = genome.fasta;
+                if (genome.index) {
+                    reference.indexURL = genome.index;
+                }
+                if (genome.annotation) {
+                    annotationTrack = {
+                        name: 'Gene Annotations',
+                        type: 'annotation',
+                        format: genome.annotationFormat || 'gtf',
+                        url: genome.annotation,
+                        displayMode: 'COLLAPSED',
+                        height: 100
+                    };
+                }
+            } else if (genome && isFileProtocol) {
+                // file:// + genome in manifest: signal to caller to prompt user for local files
+                throw { code: 'NEEDS_FILE_PICKER', genomeId: id };
+            } else {
+                throw new Error('Custom genome "' + id + '" not found in manifest and no reference files provided. ' +
+                    'Include the reference files in the shared folder, or add this genome to your references/ directory and run update_manifest.sh.');
+            }
+
+            return { reference, annotationTrack };
+        }
+
+        function showReferenceFilePrompt(genomeId) {
+            const statusDiv = document.getElementById('uploadStatus');
+            // Build DOM manually to avoid injecting genomeId as raw HTML
+            const wrapper = document.createElement('div');
+            wrapper.className = 'status-message status-info';
+
+            const title = document.createElement('strong');
+            title.textContent = 'Reference files needed';
+            wrapper.appendChild(title);
+            wrapper.appendChild(document.createElement('br'));
+
+            const em = document.createElement('em');
+            em.textContent = genomeId;
+
+            const msg = document.createElement('span');
+            msg.appendChild(document.createTextNode('The genome '));
+            msg.appendChild(em);
+            msg.appendChild(document.createTextNode(
+                ' is registered in your manifest but reference files cannot be loaded automatically' +
+                ' when using file:// protocol. Please select your local reference files to continue,' +
+                ' or serve via HTTP server to load them automatically.'
+            ));
+            wrapper.appendChild(msg);
+            wrapper.appendChild(document.createElement('br'));
+            wrapper.appendChild(document.createElement('br'));
+
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.id = 'promptRefInput';
+            fileInput.multiple = true;
+            fileInput.accept = '.fa,.fasta,.fna,.fa.gz,.fasta.gz,.fna.gz,.fai,.gzi,.gtf,.gff,.gff3,.gtf.gz,.gff.gz,.gff3.gz';
+            fileInput.style.cssText = 'margin-bottom: 8px; display: block;';
+            wrapper.appendChild(fileInput);
+
+            const btn = document.createElement('button');
+            btn.textContent = 'Launch Browser';
+            btn.onclick = launchWithPromptedRefs;
+            wrapper.appendChild(btn);
+
+            statusDiv.innerHTML = '';
+            statusDiv.appendChild(wrapper);
+        }
+
+        async function launchWithPromptedRefs() {
+            const input = document.getElementById('promptRefInput');
+            const files = input ? Array.from(input.files) : [];
+            const parsedRef = parseReferenceFiles(files);
+            if (!parsedRef) {
+                alert('Please select a FASTA reference file (.fa, .fasta, or .fna)');
+                return;
+            }
+            sessionData.referenceFiles = parsedRef;
+            await launchBrowser();
+        }
+
+        function parseReferenceFiles(files) {
+            let fasta = null, index = null, annotation = null, annotationFormat = null;
+            for (const f of files) {
+                if (f.name.match(/\.(fa|fasta|fna)(\.gz)?$/i)) fasta = f;
+                else if (f.name.match(/\.(fai|gzi)$/i)) index = f;
+                else if (f.name.match(/\.gtf(\.gz)?$/i)) { annotation = f; annotationFormat = 'gtf'; }
+                else if (f.name.match(/\.(gff|gff3)(\.gz)?$/i)) { annotation = f; annotationFormat = 'gff3'; }
+            }
+            if (!fasta) return null;
+            return { fasta, index, annotation, annotationFormat };
+        }
+
+        // Populate dropdown with custom genomes from manifest
+        populateGenomeDropdown();
 
         // Initialize drag and drop
         const dropZone = document.getElementById('dropZone');
@@ -684,8 +849,9 @@
                 let configFile = null;
                 const bigWigFiles = [];
                 const bedFiles = [];
+                const refFiles = [];
 
-                // Separate config, BigWig, and BED files
+                // Separate config, BigWig, BED, and reference files
                 for (const file of files) {
                     if (file.name === 'config.json') {
                         configFile = file;
@@ -693,12 +859,20 @@
                         bigWigFiles.push(file);
                     } else if (file.name.match(/\.bed$/i)) {
                         bedFiles.push(file);
+                    } else if (file.name.match(/\.(fa|fasta|fna|fai|gzi)(\.gz)?$/i) || file.name.match(/\.(gtf|gff|gff3)(\.gz)?$/i)) {
+                        refFiles.push(file);
                     }
                 }
 
                 if (bigWigFiles.length === 0 && bedFiles.length === 0) {
                     statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload .bw, .bigWig, or .bed files.</div>';
                     return;
+                }
+
+                // Parse reference files if present
+                const parsedRef = parseReferenceFiles(refFiles);
+                if (parsedRef) {
+                    sessionData.referenceFiles = parsedRef;
                 }
 
                 // Show file list
@@ -711,6 +885,9 @@
                 });
                 bedFiles.forEach(f => {
                     fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`;
+                });
+                refFiles.forEach(f => {
+                    fileListDiv.innerHTML += `<div class="file-item">📎 ${f.name}</div>`;
                 });
                 fileListDiv.classList.remove('hidden');
 
@@ -743,10 +920,21 @@
                         sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     }
 
-                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
+                    const isCustomNeedsCheck = isCustomGenome(config.genome || 'hg38') &&
+                        !sessionData.referenceFiles &&
+                        window.location.protocol === 'file:' &&
+                        CUSTOM_GENOMES[getCustomGenomeId(config.genome || '')];
+                    statusDiv.innerHTML = isCustomNeedsCheck
+                        ? '<div class="status-message status-success">✅ Session loaded!</div>'
+                        : '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
                 } else {
-                    // No config - use defaults
-                    sessionData.genome = 'hg38';
+                    // No config - use defaults; auto-detect custom genome from dropped FASTA
+                    if (parsedRef) {
+                        const fastaName = parsedRef.fasta.name.replace(/\.(fa|fasta|fna)$/i, '');
+                        sessionData.genome = 'custom:' + fastaName;
+                    } else {
+                        sessionData.genome = 'hg38';
+                    }
                     sessionData.autoscaleGroups = [];
                     sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
 
@@ -806,7 +994,7 @@
             }
 
             if (!bigWigInput.files || bigWigInput.files.length === 0) {
-                statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select at least one BigWig file</div>';
+                statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select at least one track file</div>';
                 return;
             }
 
@@ -817,16 +1005,35 @@
                 sessionData.locus = location || null;
                 sessionData.bigWigFiles = {};
                 sessionData.autoscaleGroups = ['Group 1'];
+                sessionData.referenceFiles = null;
+
+                // Handle custom genome reference files
+                if (isCustomGenome(genome)) {
+                    const isFileProtocol = window.location.protocol === 'file:';
+                    if (isFileProtocol) {
+                        const refInput = document.getElementById('referenceFileInput');
+                        const refFileList = refInput ? Array.from(refInput.files) : [];
+                        const parsedRef = parseReferenceFiles(refFileList);
+                        if (!parsedRef) {
+                            statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select a FASTA reference file for the custom genome</div>';
+                            return;
+                        }
+                        sessionData.referenceFiles = parsedRef;
+                    }
+                    // On HTTP, files load from manifest paths — no local files needed
+                }
 
                 const files = Array.from(bigWigInput.files);
-                for (const file of files) {
+                // Filter out reference files from track files
+                const trackFiles = files.filter(f => !f.name.match(/\.(fa|fasta|fna|fai|gtf|gff|gff3)$/i));
+                for (const file of trackFiles) {
                     sessionData.bigWigFiles[file.name] = file;
                 }
 
-                sessionData.tracks = createDefaultTracks(files);
+                sessionData.tracks = createDefaultTracks(trackFiles);
 
                 statusDiv.innerHTML = '<div class="status-message status-success">✅ Session created! Launching browser...</div>';
-                
+
                 setTimeout(() => {
                     launchBrowser();
                 }, 500);
@@ -838,11 +1045,6 @@
         }
 
         async function launchBrowser() {
-            // Switch views
-            document.getElementById('setupView').style.display = 'none';
-            document.getElementById('browserView').classList.add('active');
-            document.getElementById('genomeDisplay').textContent = sessionData.genome.toUpperCase();
-
             // Default loci for genomes
             const defaultLoci = {
                 'hg38': 'chr17:7,661,779-7,687,550',
@@ -851,21 +1053,49 @@
                 'mm39': 'chr11:69,379,365-69,390,879'
             };
 
-            const locus = sessionData.locus || defaultLoci[sessionData.genome] || 'chr1:1,000,000-2,000,000';
+            const locus = sessionData.locus || defaultLoci[sessionData.genome] || 'all';
 
             // Create IGV options
             const igvOptions = {
-                genome: sessionData.genome,
                 locus: locus,
                 tracks: []
             };
 
-            // Add gene track (will be loaded by IGV.js automatically)
-            // The genome reference includes gene annotations
+            let customAnnotationTrack = null;
+
+            try {
+                if (isCustomGenome(sessionData.genome)) {
+                    // Custom genome: use reference object instead of genome string
+                    const { reference, annotationTrack } = await buildReferenceConfig(sessionData.genome);
+                    igvOptions.reference = reference;
+                    customAnnotationTrack = annotationTrack; // pushed after data tracks so it renders below them
+                } else {
+                    // Preset genome: IGV.js loads annotations automatically
+                    igvOptions.genome = sessionData.genome;
+                }
+            } catch (error) {
+                if (error && error.code === 'NEEDS_FILE_PICKER') {
+                    // file:// + genome in manifest but no local files — show inline picker
+                    showReferenceFilePrompt(error.genomeId);
+                    return;
+                }
+                console.error('Error building reference config:', error);
+                alert('Error loading custom genome: ' + (error.message || error));
+                return;
+            }
+
+            // Switch views (after config is validated)
+            document.getElementById('setupView').style.display = 'none';
+            document.getElementById('browserView').classList.add('active');
+
+            const displayName = isCustomGenome(sessionData.genome)
+                ? getCustomGenomeId(sessionData.genome)
+                : sessionData.genome.toUpperCase();
+            document.getElementById('genomeDisplay').textContent = displayName;
 
             // Add BigWig tracks and store references
             sessionData.trackViewIndices = []; // Track which IGV trackView index corresponds to our tracks
-            
+
             for (let i = 0; i < sessionData.tracks.length; i++) {
                 const track = sessionData.tracks[i];
                 const file = sessionData.bigWigFiles[track.file];
@@ -891,6 +1121,11 @@
                     // IGV adds a ruler/sequence track at index 0, then genes, then our tracks
                     sessionData.trackViewIndices.push(i);
                 }
+            }
+
+            // Push custom annotation track last so it renders below data tracks (mirrors preset genome behaviour)
+            if (customAnnotationTrack) {
+                igvOptions.tracks.push(customAnnotationTrack);
             }
 
             // Create IGV browser
@@ -1404,7 +1639,11 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and all BigWig files in one folder\n2. Share the folder\n3. They can drag & drop it to load everything!');
+            if (isCustomGenome(sessionData.genome)) {
+                alert('✅ Config saved!\n\nTo share with others (two options):\n\nOption A — Include reference files (works everywhere):\nPut config.json, track files, AND reference files (FASTA, FAI, GTF/GFF) in one folder and share it.\n\nOption B — Manifest only (no reference files needed):\nShare only config.json and track files. The recipient must:\n1. Have this genome in their references/ directory\n2. Have run ./references/update_manifest.sh\n3. Serve via HTTP server (e.g. python -m http.server)');
+            } else {
+                alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and all BigWig files in one folder\n2. Share the folder\n3. They can drag & drop it to load everything!');
+            }
         }
 
         function exportImage() {
@@ -1445,7 +1684,8 @@
                     locus: null,
                     tracks: [],
                     bigWigFiles: {},
-                    autoscaleGroups: ['Group 1']
+                    autoscaleGroups: ['Group 1'],
+                    referenceFiles: null
                 };
                 selectedTracks.clear();
                 lastClickedIndex = null;
@@ -1457,6 +1697,9 @@
                 document.getElementById('uploadStatus').innerHTML = '';
                 document.getElementById('manualStatus').innerHTML = '';
                 document.getElementById('fileList').classList.add('hidden');
+                document.getElementById('customRefSection').style.display = 'none';
+                const refInput = document.getElementById('referenceFileInput');
+                if (refInput) refInput.value = '';
                 
                 // Switch views
                 document.getElementById('browserView').classList.remove('active');
