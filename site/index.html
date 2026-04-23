@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IGV Genome Browser</title>
+    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.8/dist/igv.min.js"></script>
+    <script>var CUSTOM_GENOMES = {};</script>
+    <script src="references/manifest.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f0f2f5; color: #1a1d23; }
+        .header { background: #1c2333; border-bottom: none; padding: 14px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 12px; }
+        .header h1 { font-size: 17px; font-weight: 600; color: #e8ecf4; margin-bottom: 0; letter-spacing: -0.01em; }
+        .setup-container { max-width: 900px; margin: 40px auto; padding: 20px; }
+        .setup-card { background: white; border: 1px solid #d0d0d0; border-radius: 8px; padding: 30px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .setup-card h2 { font-size: 18px; margin-bottom: 20px; color: #333; border-bottom: 2px solid #4a90e2; padding-bottom: 10px; }
+        .section { margin-bottom: 25px; }
+        .section h3 { font-size: 14px; margin-bottom: 12px; color: #555; font-weight: 600; }
+        .section p { font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.5; }
+        .file-drop-zone { border: 2px dashed #d0d0d0; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; background: #fafafa; }
+        .file-drop-zone:hover { border-color: #4a90e2; background: #f0f7ff; }
+        .file-drop-zone.drag-over { border-color: #4a90e2; background: #e3f2fd; transform: scale(1.02); }
+        .drop-icon { font-size: 48px; margin-bottom: 15px; opacity: 0.6; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 6px; }
+        select, input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px; background: white; color: #333; }
+        select:focus, input[type="text"]:focus { outline: none; border-color: #4a90e2; box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1); }
+        input[type="file"] { font-size: 12px; padding: 8px; border: 1px solid #d0d0d0; border-radius: 4px; width: 100%; background: white; }
+        button { padding: 10px 20px; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+        button:hover:not(:disabled) { background: #357abd; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        button.secondary { background: white; color: #333; border: 1px solid #d0d0d0; }
+        button.secondary:hover:not(:disabled) { background: #f5f5f5; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .status-message { margin-top: 15px; padding: 12px; border-radius: 4px; font-size: 12px; }
+        .status-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .status-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .status-info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        .ref-prompt-drop { border: 2px dashed #b8d9ef; border-radius: 6px; padding: 14px; text-align: center; background: #eaf4fb; color: #335d7a; font-size: 12px; margin: 10px 0; transition: all 0.2s; }
+        .ref-prompt-drop.drag-over { border-color: #4a90e2; background: #d5e8f5; }
+        .ref-prompt-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+        .ref-prompt-row label { flex: 0 0 190px; margin-bottom: 0; font-size: 12px; color: #333; }
+        .ref-prompt-row input[type="file"] { flex: 1; }
+        .ref-prompt-note { font-size: 11px; color: #2d6a3e; margin-left: 200px; margin-top: -2px; margin-bottom: 6px; }
+        .divider { text-align: center; margin: 25px 0; color: #999; font-size: 14px; position: relative; }
+        .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 45%; height: 1px; background: #d0d0d0; }
+        .divider::before { left: 0; } .divider::after { right: 0; }
+        #igvContainer { margin: 20px; background: white; border: 1px solid #d0d0d0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-height: 600px; }
+        .controls-bar { background: #f8f9fa; border-bottom: 1px solid #d0d0d0; padding: 12px 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .browser-view { display: none; }
+        .browser-view.active { display: block; }
+        .hidden { display: none; }
+        .file-list { margin-top: 15px; padding: 12px; background: #f8f9fa; border: 1px solid #d0d0d0; border-radius: 4px; max-height: 200px; overflow-y: auto; }
+        .file-item { font-size: 11px; padding: 4px 0; color: #555; display: flex; align-items: center; gap: 8px; }
+        .file-item::before { content: '📄'; font-size: 14px; }
+        .track-controls { background: #f8f9fa; border: 1px solid #d0d0d0; border-radius: 4px; padding: 15px; margin: 20px; }
+        .track-controls h3 { font-size: 14px; margin-bottom: 12px; color: #333; }
+        .track-item { display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; margin-bottom: 8px; }
+        .track-item label { flex: 1; margin: 0; font-weight: normal; }
+        .track-item input[type="text"] { width: 100%; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px; }
+        input[type="color"] { width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px; }
+        .info-box { background: #e8f4f8; border-left: 4px solid #4a90e2; padding: 12px; margin-bottom: 20px; border-radius: 4px; font-size: 12px; line-height: 1.6; }
+        .info-box strong { display: block; margin-bottom: 5px; color: #2c5d7f; }
+        #igvContainer .igv-track-div { margin-bottom: 0 !important; border-bottom: 1px solid #e0e0e0 !important; }
+        #igvContainer .igv-track-label-div { font-size: 11px !important; padding: 2px 5px !important; min-height: 20px !important; }
+        #igvContainer .igv-sample-info-div { display: none !important; }
+        #igvContainer .igv-gear-menu-column { width: 20px !important; }
+        #igvContainer .igv-track-drag-column { width: 10px !important; }
+        .track-item.selected { background: #e3f2fd; border-color: #4a90e2; }
+        .track-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .selection-toolbar { display: none; padding: 10px; background: #e3f2fd; border: 1px solid #4a90e2; border-radius: 4px; margin-bottom: 12px; align-items: center; gap: 10px; }
+        .selection-toolbar.visible { display: flex; }
+        .track-group-badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #e0e0e0; color: #555; white-space: nowrap; }
+        .track-group-badge.has-group { background: #c8e6c9; color: #2e7d32; }
+        .drag-handle { cursor: grab; color: #999; user-select: none; font-size: 14px; padding: 0 2px; }
+        .drag-handle:hover { color: #555; }
+        .track-item.dragging { opacity: 0.4; }
+        .track-item.drag-over { border-top: 2px solid #4a90e2; margin-top: -1px; }
+
+        /* ── Tab navigation ──────────────────────────────────────────── */
+        .tab-nav { display: flex; align-items: center; gap: 0; background: #1c2333; padding: 0 24px; border-bottom: 1px solid #0e1420; }
+        .tab-btn { padding: 10px 18px; font-size: 12.5px; font-weight: 500; color: #7a8599; background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; white-space: nowrap; letter-spacing: 0.01em; }
+        .tab-btn:hover { color: #c8d0e0; background: rgba(255,255,255,0.04); }
+        .tab-btn.active { color: #e8ecf4; border-bottom-color: #4a90e2; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── Multi-locus panel ────────────────────────────────────────── */
+        .ml-layout { display: flex; flex-direction: column; height: calc(100vh - 88px); overflow: hidden; }
+        .ml-main { flex: 1; overflow: auto; background: #fff; min-width: 0; min-height: 0; }
+        .ml-sidebar { width: 100%; flex-shrink: 0; background: #f8f9fc; border-top: 1px solid #dde2ea; overflow-y: auto; max-height: 200px; }
+        .ml-sidebar-section { padding: 8px 16px; }
+        .ml-sidebar-title { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: #9aa3b8; margin-bottom: 6px; display: inline-block; }
+        .ml-cluster-row { display: flex; align-items: flex-start; gap: 6px; padding: 3px 2px; border-radius: 3px; font-size: 12px; color: #333; user-select: none; }
+        .ml-cluster-row:hover { background: #ebebeb; }
+        .ml-cluster-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; margin-top: 3px; }
+        .ml-cluster-name { font-size: 11px; font-weight: 600; }
+        .ml-cluster-eye { font-size: 13px; color: #bbb; flex-shrink: 0; cursor: pointer; padding: 0 2px; margin-top: -1px; }
+        .ml-cluster-eye:hover { color: #4a90e2; }
+        .ml-cluster-row.hidden-track .ml-cluster-name { color: #bbb; text-decoration: line-through; }
+        .ml-cluster-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+        .ml-cluster-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 2px; align-items: center; }
+        .ml-add-tag-form { display: inline-flex; gap: 2px; align-items: center; }
+        .ml-add-tag-input { font-size: 10px; border: 1px solid #d0d0d0; border-radius: 3px; padding: 1px 4px; width: 62px; outline: none; }
+        .ml-add-tag-input:focus { border-color: #4a90e2; }
+        .ml-add-tag-btn { font-size: 10px; padding: 1px 5px; border: 1px solid #d0d0d0; border-radius: 3px; background: white; cursor: pointer; color: #555; line-height: 1.4; }
+        .ml-add-tag-btn:hover { background: #e8eaf0; }
+        .ml-tag-pill { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 8px; background: #e8e8e8; color: #555; cursor: pointer; white-space: nowrap; border: 1px solid transparent; }
+        .ml-tag-pill:hover { border-color: #999; }
+        .ml-tag-pill.active { background: #4a90e2; color: white; }
+        .ml-tag-pill.removable:hover::after { content: " ×"; font-size: 8px; }
+        .ml-tag-filter-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px; align-items: center; }
+        .ml-toolbar { background: #fff; border-bottom: 1px solid #e4e7ec; padding: 7px 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 20; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .ml-toolbar label { font-size: 11px; font-weight: 500; color: #5a6478; cursor: pointer; }
+        .ml-toolbar select, .ml-toolbar input[type=range] { font-size: 11px; padding: 3px 6px; border: 1px solid #d8dce4; border-radius: 4px; width: auto; background: #f8f9fc; }
+        .ml-toolbar-sep { width: 1px; height: 18px; background: #e4e7ec; }
+        .ml-btn { padding: 4px 11px; font-size: 11px; font-weight: 500; border: 1px solid #d8dce4; border-radius: 5px; background: #fff; cursor: pointer; color: #3a4252; transition: all 0.12s; letter-spacing: 0.01em; }
+        .ml-btn:hover { background: #f0f3f8; border-color: #b8c0d0; color: #1a1d23; }
+        .ml-btn-primary { background: #3b7dd8; color: #fff; border-color: #2f6bbf; }
+        .ml-btn-primary:hover { background: #2f6bbf; border-color: #2560b0; }
+        .ml-browser { padding: 0; }
+        .ml-locus-header { display: flex; position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid #dde2ea; }
+        .ml-locus-header-inner { flex: 1; display: grid; }
+        .ml-locus-header-label { flex-shrink: 0; background: transparent; }
+        .ml-locus-cell { padding: 7px 10px; border-right: 1px solid #edf0f5; text-align: center; }
+        .ml-locus-cell:last-child { border-right: none; }
+        .ml-locus-gene { font-size: 13px; font-weight: 700; font-style: italic; color: #1a1d23; }
+        .ml-locus-coord { font-family: monospace; font-size: 10px; color: #8a94a8; margin-top: 2px; }
+        .ml-label-col { flex-shrink: 0; background: transparent; display: flex; align-items: center; overflow: hidden; }
+        .ml-track-label { font-size: 11px; font-weight: 500; color: #3a4252; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px 0 0; width: 100%; text-align: right; }
+        .ml-track-label-pill { width: 4px; flex-shrink: 0; border-radius: 2px; align-self: stretch; margin: 4px 4px 4px 5px; }
+        .ml-span-bar { display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 3px; color: #8a94a8; font-size: 9px; }
+        .ml-span-bar-line { flex: 1; height: 1px; background: currentColor; position: relative; }
+        .ml-span-bar-line::before, .ml-span-bar-line::after { content: ''; position: absolute; top: -3px; width: 0; height: 0; border: 3px solid transparent; }
+        .ml-span-bar-line::before { left: 0; border-right-color: currentColor; border-left: none; }
+        .ml-span-bar-line::after { right: 0; border-left-color: currentColor; border-right: none; }
+        .ml-cpick { position: fixed; z-index: 500; background: #fff; border: 1px solid #dde2ea; border-radius: 8px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); width: 210px; display: none; }
+        .ml-cpick.open { display: block; }
+        .ml-cpick-preview { width: 100%; height: 28px; border-radius: 4px; margin-bottom: 10px; border: 1px solid rgba(0,0,0,0.1); }
+        .ml-cpick-row { margin-bottom: 8px; }
+        .ml-cpick-label { font-size: 9.5px; font-weight: 600; color: #8a94a8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
+        .ml-cpick-hue { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border-radius: 5px; border: none; cursor: pointer; background: linear-gradient(to right, hsl(0,80%,52%), hsl(30,80%,52%), hsl(60,80%,52%), hsl(90,80%,52%), hsl(120,80%,52%), hsl(150,80%,52%), hsl(180,80%,52%), hsl(210,80%,52%), hsl(240,80%,52%), hsl(270,80%,52%), hsl(300,80%,52%), hsl(330,80%,52%), hsl(360,80%,52%)); outline: none; }
+        .ml-cpick-hue::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); background: #888; cursor: pointer; }
+        .ml-cpick-light { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border-radius: 5px; border: none; cursor: pointer; outline: none; }
+        .ml-cpick-light::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); background: #888; cursor: pointer; }
+        .ml-cpick-sat { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border-radius: 5px; border: none; cursor: pointer; outline: none; }
+        .ml-cpick-sat::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); background: #888; cursor: pointer; }
+        .ml-cpick-hex-row { display: flex; gap: 5px; align-items: center; margin-top: 8px; }
+        .ml-cpick-hex { flex: 1; font-size: 11px; font-family: monospace; border: 1px solid #d8dce4; border-radius: 4px; padding: 4px 7px; outline: none; color: #1a1d23; }
+        .ml-cpick-hex:focus { border-color: #3b7dd8; }
+        .ml-cpick-apply { font-size: 10px; padding: 4px 9px; border-radius: 4px; background: #3b7dd8; color: #fff; border: none; cursor: pointer; white-space: nowrap; }
+        .ml-cpick-apply:hover { background: #2f6bbf; }
+        .ml-cpick-close { float: right; background: none; border: none; color: #aaa; font-size: 14px; cursor: pointer; line-height: 1; padding: 0; margin-bottom: 6px; }
+        .ml-track-row { display: flex; border-bottom: 1px solid #f2f4f8; }
+        .ml-track-row:hover { background: rgba(58,122,216,0.03); }
+        .ml-track-row.no-border { border-bottom: none; }
+        .ml-track-inner { flex: 1; display: grid; }
+        .ml-track-cell { border-right: 1px solid #f0f3f8; position: relative; overflow: hidden; }
+        .ml-track-cell:last-child { border-right: none; }
+        .ml-track-row.no-border .ml-track-cell { border-right: none; }
+        .ml-track-canvas { display: block; width: 100%; }
+        .ml-ymax { font-family: monospace; font-size: 9px; color: #c0c8d8; position: absolute; top: 3px; right: 4px; pointer-events: none; }
+        .ml-gene-row { display: flex; background: #fafbfd; border-bottom: 1px solid #dde2ea; padding-top: 4px; padding-bottom: 6px; }
+        .ml-gene-inner { flex: 1; display: grid; }
+        .ml-gene-cell { padding: 0 0 2px 0; border-right: 1px solid #edf0f5; overflow: visible; }
+        .ml-gene-cell:last-child { border-right: none; }
+        
+        /* Locus manager modal */
+        .ml-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,15,30,0.5); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .ml-modal-overlay.open { display: flex; }
+        .ml-modal { background: white; border-radius: 10px; padding: 24px; width: 580px; max-width: 95vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08); }
+        .ml-modal h3 { font-size: 15px; margin-bottom: 16px; color: #1a1d23; font-weight: 600; letter-spacing: -0.01em; }
+        .ml-locus-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+        
+        /* Updated locus item to support stacking & checkboxes */
+        .ml-locus-item { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa; }
+        .ml-locus-item-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+        .ml-locus-item input[type=text] { flex: 1; border: 1px solid #d0d0d0; border-radius: 3px; padding: 4px 7px; font-size: 12px; font-family: monospace; }
+        .ml-locus-item input[type=text]:focus { outline: none; border-color: #4a90e2; }
+        .ml-locus-item-label { font-size: 11px; color: #888; width: 50px; flex-shrink: 0; }
+        .ml-remove-btn { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; }
+        
+        .ml-add-locus-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; margin-top: 10px; }
+        .ml-add-locus-row input { flex: 1; border: 1px solid #d0d0d0; border-radius: 3px; padding: 6px 8px; font-size: 12px; font-family: monospace; }
+        .ml-add-locus-row input:focus { outline: none; border-color: #4a90e2; }
+        
+        /* Checkbox list styles */
+        .ml-gene-cb-list { display: flex; flex-wrap: wrap; gap: 6px 12px; max-height: 80px; overflow-y: auto; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; padding: 6px; }
+        .ml-gene-cb { font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: #333; }
+        .ml-gene-cb input { margin: 0; cursor: pointer; accent-color: #4a90e2; }
+
+        /* ── Figure Style Panel ─────────────────────────────────────────── */
+        .ml-style-panel { position: fixed; right: 0; top: 88px; width: 260px; background: #fff; border-left: 2px solid #d0d0d0; border-bottom: 2px solid #d0d0d0; border-radius: 0 0 0 6px; box-shadow: -4px 4px 16px rgba(0,0,0,0.12); z-index: 100; display: none; flex-direction: column; max-height: calc(100vh - 108px); overflow-y: auto; }
+        .ml-style-panel.open { display: flex; }
+        .ml-style-header { padding: 10px 14px 8px; font-size: 12px; font-weight: 700; color: #333; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; position: sticky; top: 0; z-index: 2; }
+        .ml-style-close { background: none; border: none; font-size: 16px; cursor: pointer; color: #999; padding: 0 2px; line-height: 1; }
+        .ml-style-close:hover { color: #333; }
+        .ml-style-section { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; }
+        .ml-style-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #999; margin-bottom: 8px; }
+        .ml-style-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
+        .ml-style-label { font-size: 11px; color: #555; flex: 1; }
+        .ml-style-row input[type=range] { width: 80px; accent-color: #4a90e2; }
+        .ml-style-row input[type=color] { width: 34px; height: 24px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; padding: 1px; background: none; }
+        .ml-style-val { font-size: 10px; color: #999; font-family: monospace; min-width: 26px; text-align: right; }
+        .ml-style-row select { font-size: 11px; border: 1px solid #d0d0d0; border-radius: 3px; padding: 2px 4px; width: auto; flex: 1; }
+        .ml-style-row input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: #4a90e2; }
+        .ml-cluster-color-btn { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.2); cursor: pointer; padding: 0; display: inline-block; position: relative; overflow: hidden; }
+        .ml-cluster-color-btn input[type=color] { position: absolute; inset: -4px; width: 28px; height: 28px; opacity: 0; cursor: pointer; border: none; padding: 0; }
+        .ml-autocolor-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 14px 8px; border-bottom: 1px solid #f0f0f0; }
+        .ml-autocolor-row .ml-btn { font-size: 10px; padding: 3px 8px; }
+        .ml-autocolor-hint { font-size: 10px; color: #aaa; line-height: 1.4; padding: 0 14px 8px; }
+        .ml-tc-row { display:flex; align-items:center; gap:5px; padding:2px 0; }
+        .ml-tc-cb  { width:13px; height:13px; cursor:pointer; accent-color:#3b7dd8; flex-shrink:0; }
+        .ml-tc-swatch { width:14px; height:14px; border-radius:3px; flex-shrink:0; border:1px solid rgba(0,0,0,0.18); position:relative; overflow:hidden; cursor:pointer; }
+        .ml-tc-swatch input[type=color] { position:absolute; inset:-4px; width:28px; height:28px; opacity:0; cursor:pointer; border:none; padding:0; }
+        .ml-tc-name { font-size:11px; color:#444; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ml-tc-tags { font-size:9px; color:#bbb; flex-shrink:0; max-width:56px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ml-tc-hex  { font-size:10px; font-family:monospace; width:58px; border:1px solid #d8dce4; border-radius:3px; padding:2px 4px; outline:none; color:#1a1d23; }
+        .ml-tc-hex:focus { border-color:#3b7dd8; }
+        .ml-tc-sel-bar { display:flex; align-items:center; gap:8px; margin-bottom:5px; padding-bottom:5px; border-bottom:1px solid #f0f0f0; flex-wrap:wrap; }
+        .ml-tc-sel-bar label { font-size:10px; color:#555; cursor:pointer; display:flex; align-items:center; gap:3px; }
+        .ml-hs-panel { background:#f7f8fa; border:1px solid #e4e7ec; border-radius:5px; padding:8px 10px; margin-top:8px; }
+        .ml-hs-title { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#999; margin-bottom:7px; }
+        .ml-hs-chips { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+        .ml-hs-chip  { width:18px; height:18px; border-radius:50%; cursor:pointer; border:2px solid transparent; box-sizing:border-box; transition:transform 0.1s; }
+        .ml-hs-chip:hover { transform:scale(1.2); }
+        .ml-hs-chip.sel { border-color:#222; }
+        .ml-hs-row  { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+        .ml-hs-lbl  { font-size:9.5px; color:#666; min-width:62px; }
+        .ml-hs-range { flex:1; accent-color:#3b7dd8; }
+        .ml-hs-val  { font-size:9px; color:#999; font-family:monospace; min-width:26px; text-align:right; }
+        .ml-hs-hex-row { display:flex; align-items:center; gap:5px; margin-top:3px; margin-bottom:3px; }
+        .ml-hs-hex { font-size:10px; font-family:monospace; width:64px; border:1px solid #d8dce4; border-radius:3px; padding:2px 5px; outline:none; color:#1a1d23; flex-shrink:0; }
+        .ml-hs-hex:focus { border-color:#3b7dd8; }
+        .ml-hs-hex-prev { width:16px; height:16px; border-radius:3px; border:1px solid rgba(0,0,0,0.15); flex-shrink:0; }
+    </style>
+</head>
+<body>
+    <div id="setupView">
+        <div class="header">
+            <h1>🧬 IGV Genome Browser - Session Setup</h1>
+        </div>
+
+        <div class="setup-container">
+            <div class="info-box">
+                <strong>📋 How to share sessions with collaborators:</strong>
+                1. Load your BigWig files and configure track names/colors<br>
+                2. Click "Save Session Config" to download config.json<br>
+                3. Share a folder containing config.json + all BigWig files<br>
+                4. Recipients can drag & drop the entire folder to load everything with your exact settings!
+            </div>
+
+            <div class="setup-card">
+                <h2>Option 1: Load Existing Session</h2>
+                
+                <div class="section">
+                    <h3>📁 Drop Session Folder or Select Files</h3>
+                    <p>Upload a folder containing config.json and BigWig/BED files, or select them individually.</p>
+                    
+                    <div class="file-drop-zone" id="dropZone">
+                        <div class="drop-icon">📂</div>
+                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+                            Drop folder or files here
+                        </div>
+                        <div style="font-size: 12px; color: #666;">
+                            or click to browse for files
+                        </div>
+                    </div>
+
+                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.json,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3" style="display: none;">
+                    
+                    <div class="button-group" style="margin-top: 15px;">
+                        <button onclick="document.getElementById('folderInput').click()" class="secondary">
+                            📁 Select Folder
+                        </button>
+                        <button onclick="document.getElementById('filesInput').click()" class="secondary">
+                            📄 Select Files
+                        </button>
+                    </div>
+
+                    <div id="uploadStatus"></div>
+                    <div id="fileList" class="file-list hidden"></div>
+                </div>
+            </div>
+
+            <div class="divider">OR</div>
+
+            <div class="setup-card">
+                <h2>Option 2: Create New Session</h2>
+                
+                <div class="section">
+                    <div class="form-group">
+                        <label>Reference Genome *</label>
+                        <select id="genomeSelect" onchange="onGenomeSelectChange()">
+                            <option value="">Select genome...</option>
+                            <option value="hg38">Human (GRCh38/hg38)</option>
+                            <option value="hg19">Human (GRCh37/hg19)</option>
+                            <option value="mm10">Mouse (GRCm38/mm10)</option>
+                            <option value="mm39">Mouse (GRCm39/mm39)</option>
+                        </select>
+                    </div>
+
+                    <div id="customRefSection" class="form-group" style="display: none;">
+                        <label>Reference Files</label>
+                        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                            <div>
+                                <label style="font-size: 12px; color: #555;">FASTA (required)</label>
+                                <input type="file" id="refFastaInput" accept=".fa,.fasta,.fna,.fa.gz,.fasta.gz,.fna.gz">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #555;">FASTA index .fai (recommended)</label>
+                                <input type="file" id="refFaiInput" accept=".fai,.gzi">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #555;">Annotation .gtf / .gff (optional)</label>
+                                <input type="file" id="refGtfInput" accept=".gtf,.gff,.gff3,.gtf.gz,.gff.gz,.gff3.gz">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Starting Location (optional)</label>
+                        <input type="text" id="startLocation" placeholder="e.g., chr17:7,661,779-7,687,550">
+                        <p style="font-size: 11px; color: #666; margin-top: 4px;">
+                            Leave blank to start at a default location
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Track Files *</label>
+                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3">
+                        <p style="font-size: 11px; color: #666; margin-top: 4px;">
+                            Select one or more BigWig files (.bw, .bigWig) or BED files (.bed)
+                        </p>
+                    </div>
+
+                    <button onclick="createNewSession()" style="width: 100%;">
+                        🚀 Launch Browser
+                    </button>
+
+                    <div id="manualStatus"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="browserView" class="browser-view">
+
+        <div class="tab-nav" id="mainTabNav">
+            <button class="tab-btn active" onclick="switchTab('igv')" id="tabBtnIgv">🔬 IGV Browser</button>
+            <button class="tab-btn" onclick="switchTab('multilocus')" id="tabBtnMl">📊 Multi-Locus View</button>
+        </div>
+
+        <div class="tab-panel active" id="tabIgv" style="height:calc(100vh - 40px);overflow:auto;">
+        <div class="header">
+            <h1>🧬 IGV Genome Browser</h1>
+        </div>
+
+        <div class="controls-bar">
+            <span style="font-size: 12px; color: #666;">Genome: <strong id="genomeDisplay">-</strong></span>
+            <span style="font-size: 12px; color: #666; margin-left: 15px;">
+                Track Height:
+                <select id="trackHeightSelect" onchange="updateAllTrackHeights(this.value)" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
+                    <option value="40">Compact (40px)</option>
+                    <option value="50" selected>Standard (50px)</option>
+                    <option value="75">Medium (75px)</option>
+                    <option value="100">Tall (100px)</option>
+                    <option value="150">Extra Tall (150px)</option>
+                </select>
+            </span>
+            <span style="font-size: 12px; color: #666; margin-left: 15px;">
+                Autoscale Groups: <strong id="groupCountDisplay">1</strong>
+            </span>
+            <div style="flex: 1;"></div>
+            <button onclick="openAddTracksPicker()" class="secondary" title="Add more BigWig or BED tracks to this session">➕ Add Tracks</button>
+            <button onclick="document.getElementById('addTracksFolderInput').click()" class="secondary" title="Add every track file inside a folder">📁 Add Folder</button>
+            <input type="file" id="addTracksFilesInput" multiple accept=".bw,.bigwig,.bigWig,.bed" style="display:none;" onchange="handleAddTracksFilesSelect(event)">
+            <input type="file" id="addTracksFolderInput" webkitdirectory directory multiple style="display:none;" onchange="handleAddTracksFolderSelect(event)">
+            <button onclick="saveSessionConfig()" class="secondary">💾 Save Session Config</button>
+            <button onclick="exportImage()" class="secondary">📷 Export Image</button>
+            <button onclick="backToSetup()" class="secondary">← Back to Setup</button>
+        </div>
+
+        <div id="igvContainer"></div>
+
+        <div class="track-controls" id="trackControls">
+            <h3>Track Settings</h3>
+            <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Customize track names and colors. Shift-click to select multiple tracks, then use the toolbar to set autoscale groups.</p>
+
+            <div class="selection-toolbar" id="selectionToolbar">
+                <span style="font-size: 12px; font-weight: 600;"><span id="selectedCount">0</span> tracks selected</span>
+                <select id="groupAssignSelect" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
+                    <option value="">None (Independent)</option>
+                </select>
+                <button onclick="assignSelectedToGroup()" style="padding: 6px 12px; font-size: 11px;">Set Group</button>
+                <button onclick="clearSelection()" class="secondary" style="padding: 6px 12px; font-size: 11px;">Clear Selection</button>
+            </div>
+
+            <div id="trackList"></div>
+
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #d0d0d0;">
+                <h4 style="font-size: 13px; margin-bottom: 10px; color: #333;">Autoscale Groups</h4>
+                <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Tracks in the same group share the same Y-axis scale.</p>
+                <div id="groupList" style="margin-bottom: 10px;"></div>
+                <button onclick="addNewGroup()" class="secondary" style="padding: 6px 12px; font-size: 11px;">+ Add Group</button>
+            </div>
+        </div>
+        </div>
+
+        <div class="tab-panel" id="tabMultilocus" style="height:calc(100vh - 40px);overflow:hidden;">
+            <div class="ml-layout">
+                <div class="ml-main" id="mlMain">
+                    <div class="ml-toolbar">
+                        <label>Track height:</label>
+                        <input type="range" id="mlTrackHeight" min="30" max="160" value="70"
+                               oninput="mlState.trackHeight=+this.value; document.getElementById('mlThVal').textContent=this.value+'px'; mlRender();">
+                        <span id="mlThVal" style="font-size:11px;color:#666;font-family:monospace;">70px</span>
+                        <div class="ml-toolbar-sep"></div>
+                        <label>Y-scale:</label>
+                        <select id="mlYscale" onchange="mlState.yscale=this.value; mlRender();">
+                            <option value="auto" selected>Auto per cell</option>
+                            <option value="row">Per track (row)</option>
+                            <option value="group">By autoscale group</option>
+                            <option value="group-row">By group (all loci)</option>
+                            <option value="global">Global max</option>
+                        </select>
+                        <div class="ml-toolbar-sep"></div>
+                        <label><input type="checkbox" id="mlShowGene" checked onchange="mlState.showGene=this.checked; mlRender();"> Gene model</label>
+                        <label><input type="checkbox" id="mlShowYmax" checked onchange="mlState.showYmax=this.checked; mlRender();"> Y-max</label>
+                        <label><input type="checkbox" id="mlShowLabels" checked onchange="mlState.showLabels=this.checked; mlRender();"> Labels</label>
+                        <label><input type="checkbox" id="mlShowBorder" checked onchange="mlState.showBorder=this.checked; mlRender();"> Cell borders</label>
+                        <div class="ml-toolbar-sep"></div>
+                        <button class="ml-btn ml-btn-primary" onclick="openLocusManager()">&#43; Manage Loci</button>
+                        <button class="ml-btn" id="mlStyleBtn" onclick="mlToggleStylePanel()">&#9881; Figure Style</button>
+                        <button class="ml-btn" onclick="mlExportSVG()">Export SVG</button>
+                    </div>
+                    <div id="mlBrowser" class="ml-browser"></div>
+                </div>
+
+                <aside class="ml-sidebar">
+                    <div class="ml-sidebar-section" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+                        <div style="flex:2;min-width:260px;">
+                            <div class="ml-sidebar-title">Tracks</div>
+                            <span style="font-size:9px;color:#aaa;margin-left:6px;">click 👁 to toggle visibility &middot; add tags to group tracks &middot; click tags below to filter</span>
+                            <div id="mlClusterList" style="display:flex;flex-wrap:wrap;gap:0 12px;margin-top:4px;"></div>
+                        </div>
+                        <div style="flex:1;min-width:160px;">
+                            <div class="ml-sidebar-title">Filter by tag</div>
+                            <div id="mlTagFilterRow" class="ml-tag-filter-row">
+                                <span style="font-size:10px;color:#bbb;">No tags yet</span>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+        <div class="ml-style-panel" id="mlStylePanel">
+            <div class="ml-style-header">
+                Figure Style
+                <button class="ml-style-close" onclick="mlToggleStylePanel()" title="Close">&#x2715;</button>
+            </div>
+            <div class="ml-style-section">
+                <div class="ml-style-section-title">Show / Hide</div>
+                <div class="ml-style-row"><label class="ml-style-label" for="mlStShowBg">Track background</label><input type="checkbox" id="mlStShowBg" checked onchange="mlState.showTrackBg=this.checked; mlRender();"></div>
+                <div class="ml-style-row"><label class="ml-style-label" for="mlStShowBorder2">Cell borders</label><input type="checkbox" id="mlStShowBorder2" checked onchange="mlState.showBorder=this.checked; document.getElementById('mlShowBorder').checked=this.checked; mlRender();"></div>
+                <div class="ml-style-row"><label class="ml-style-label" for="mlStShowGene2">Gene model track</label><input type="checkbox" id="mlStShowGene2" checked onchange="mlState.showGene=this.checked; document.getElementById('mlShowGene').checked=this.checked; mlRender();"></div>
+                <div class="ml-style-row"><label class="ml-style-label" for="mlStShowYmax2">Y-max labels</label><input type="checkbox" id="mlStShowYmax2" checked onchange="mlState.showYmax=this.checked; document.getElementById('mlShowYmax').checked=this.checked; mlRender();"></div>
+                <div class="ml-style-row">
+                    <label class="ml-style-label">Y-axis label format</label>
+                    <select onchange="mlState.ymaxMode=this.value; mlRender();">
+                        <option value="max">Max only (e.g. 4.41)</option>
+                        <option value="range">Range (e.g. 0–4.41)</option>
+                    </select>
+                </div>
+                <div class="ml-style-row"><label class="ml-style-label" for="mlStShowLabels2">Track labels</label><input type="checkbox" id="mlStShowLabels2" checked onchange="mlState.showLabels=this.checked; document.getElementById('mlShowLabels').checked=this.checked; mlRender();"></div>
+                <div class="ml-style-row" style="margin-top:4px;">
+                    <label class="ml-style-label">Label text colour</label>
+                    <select onchange="mlState.labelColor=this.value; mlRender();" id="mlStLabelColor">
+                        <option value="black">Black</option>
+                        <option value="track">Match track colour</option>
+                    </select>
+                </div>
+            </div>
+            <div class="ml-style-section">
+                <div class="ml-style-section-title">Typography</div>
+                <div class="ml-style-row">
+                    <label class="ml-style-label">Font family</label>
+                    <select onchange="mlState.fontFamily=this.value; mlRender();" id="mlStFontFamily">
+                        <option value="Arial, sans-serif">Arial</option>
+                        <option value="Helvetica, Arial, sans-serif">Helvetica</option>
+                        <option value="'Times New Roman', serif">Times New Roman</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="'Courier New', monospace">Courier New</option>
+                        <option value="Verdana, sans-serif">Verdana</option>
+                    </select>
+                </div>
+                <div class="ml-style-row"><label class="ml-style-label">Gene name size</label><input type="range" min="9" max="22" value="13" id="mlStGeneNameSize" oninput="mlState.fontSizeGeneName=+this.value; document.getElementById('mlStGeneNameSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStGeneNameSizeVal">13</span></div>
+                <div class="ml-style-row"><label class="ml-style-label">Locus title size</label><input type="range" min="9" max="22" value="13" id="mlStLocusGeneSize" oninput="mlState.fontSizeLocusGene=+this.value; document.getElementById('mlStLocusGeneSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStLocusGeneSizeVal">13</span></div>
+                <div class="ml-style-row"><label class="ml-style-label">Coord label size</label><input type="range" min="7" max="16" value="10" id="mlStCoordSize" oninput="mlState.fontSizeCoord=+this.value; document.getElementById('mlStCoordSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStCoordSizeVal">10</span></div>
+                <div class="ml-style-row"><label class="ml-style-label">Track label size</label><input type="range" min="7" max="16" value="11" id="mlStTrackLabelSize" oninput="mlState.fontSizeTrackLabel=+this.value; document.getElementById('mlStTrackLabelSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStTrackLabelSizeVal">11</span></div>
+                <div class="ml-style-row"><label class="ml-style-label">Y-max label size</label><input type="range" min="6" max="14" value="9" id="mlStYmaxSize" oninput="mlState.fontSizeYmax=+this.value; document.getElementById('mlStYmaxSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStYmaxSizeVal">9</span></div>
+            </div>
+            <div class="ml-style-section">
+                <div class="ml-style-section-title">Gene Model</div>
+                <div class="ml-style-row">
+                    <label class="ml-style-label">Display mode</label>
+                    <select id="mlStGeneMode" onchange="mlState.geneModelMode=this.value; mlRender();">
+                        <option value="squished" selected>Squished (IGV-style)</option>
+                        <option value="collapsed">Collapsed (union)</option>
+                        <option value="full">Full transcripts</option>
+                        <option value="bar">Solid bar</option>
+                        <option value="arrows">Arrows only</option>
+                    </select>
+                </div>
+                <div class="ml-style-row"><label class="ml-style-label">Backbone / arrows</label><input type="color" value="#8a7030" id="mlStGeneBackbone" oninput="mlState.geneModelColor=this.value; mlRender();"></div>
+                <div class="ml-style-row"><label class="ml-style-label">Exon fill</label><input type="color" value="#c4a84a" id="mlStGeneExon" oninput="mlState.geneExonColor=this.value; mlRender();"></div>
+                <div class="ml-style-row"><label class="ml-style-label">Gene name colour</label><input type="color" value="#8a7030" id="mlStGeneLabelColor" oninput="mlState.geneLabelColor=this.value; mlRender();"></div>
+            </div>
+            <div class="ml-style-section">
+                <div class="ml-style-section-title">Locus Header</div>
+                <div class="ml-style-row"><label class="ml-style-label" for="mlStShowSpanBar">Span arrow</label><input type="checkbox" id="mlStShowSpanBar" onchange="mlState.showSpanBar=this.checked; mlRender();"></div>
+                <div style="font-size:10px;color:#aaa;margin-top:2px;line-height:1.4;">Draws a ←——→ scale bar below the coordinates.</div>
+            </div>
+            <div class="ml-style-section">
+                <div class="ml-style-section-title">Figure Size (Export)</div>
+                <div class="ml-style-row"><label class="ml-style-label">Column width</label><input type="range" min="120" max="600" value="260" step="10" id="mlStColW" oninput="mlState.exportColW=+this.value; document.getElementById('mlStColWVal').textContent=this.value+'px';"><span class="ml-style-val" id="mlStColWVal">260px</span></div>
+                <div class="ml-style-row">
+                    <label class="ml-style-label">Scale / DPI</label>
+                    <select onchange="mlState.exportScale=+this.value;" id="mlStScale">
+                        <option value="1">1× (screen)</option>
+                        <option value="2" selected>2× (print-ready)</option>
+                        <option value="3">3× (high-res)</option>
+                    </select>
+                </div>
+                <div style="font-size:10px;color:#aaa;margin-top:4px;line-height:1.5;">Column width × scale = pixel density in the exported SVG/PNG.</div>
+            </div>
+            <div class="ml-style-section">
+                <div class="ml-style-section-title">Track Colours</div>
+                <div style="font-size:10px;color:#aaa;margin-bottom:6px;line-height:1.5;">Check tracks to include in hue-shift. Click a swatch or type a hex code to change a single track colour.</div>
+                <div class="ml-tc-sel-bar">
+                    <label><input type="checkbox" class="ml-tc-cb" id="mlTcSelAll" onchange="mlTcToggleAll(this.checked)"> All</label>
+                    <span style="font-size:9px;color:#aaa;flex:1;text-align:right;" id="mlTcSelCount">0 selected</span>
+                </div>
+                <div id="mlStyleTrackColors" style="display:flex;flex-direction:column;gap:3px;"></div>
+                <div class="ml-hs-panel">
+                    <div class="ml-hs-title">Hue shift &mdash; apply to selected</div>
+                    <div class="ml-hs-chips" id="mlHsChips"></div>
+                    <div class="ml-hs-hex-row">
+                        <span class="ml-hs-lbl" style="font-size:9.5px;">Or hex</span>
+                        <div class="ml-hs-hex-prev" id="mlHsHexPrev"></div>
+                        <input type="text" class="ml-hs-hex" id="mlHsHexInput" maxlength="7" placeholder="#4a90e2" oninput="mlHsHexLive(this.value)" onblur="mlHsHexCommit(this)">
+                    </div>
+                    <div class="ml-hs-row"><span class="ml-hs-lbl">Saturation</span><input type="range" class="ml-hs-range" id="mlHsSat" min="20" max="100" value="68" oninput="mlHsUpdateChips();document.getElementById('mlHsSatV').textContent=this.value+'%'"><span class="ml-hs-val" id="mlHsSatV">68%</span></div>
+                    <div class="ml-hs-row"><span class="ml-hs-lbl">Lightness</span><input type="range" class="ml-hs-range" id="mlHsLt" min="25" max="78" value="50" oninput="mlHsUpdateChips();document.getElementById('mlHsLtV').textContent=this.value+'%'"><span class="ml-hs-val" id="mlHsLtV">50%</span></div>
+                    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">
+                        <button class="ml-btn" onclick="mlApplyHueToSelected()" style="font-size:10px;padding:3px 8px;">Apply hue to selected</button>
+                        <button class="ml-btn" onclick="mlAutoColorByTag()" style="font-size:10px;padding:3px 8px;">Auto-colour by tag</button>
+                        <button class="ml-btn" onclick="mlResetColors()" style="font-size:10px;padding:3px 8px;">Reset colours</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+    </div>
+
+    <div class="ml-cpick" id="mlColorPicker">
+        <button class="ml-cpick-close" onclick="mlColorPickerClose()">&#x2715;</button>
+        <div class="ml-cpick-preview" id="mlCpickPreview"></div>
+        <div class="ml-cpick-row"><div class="ml-cpick-label">Hue</div><input type="range" class="ml-cpick-hue" id="mlCpickHue" min="0" max="360" value="210" oninput="mlCpickUpdate()"></div>
+        <div class="ml-cpick-row"><div class="ml-cpick-label">Saturation</div><input type="range" class="ml-cpick-sat" id="mlCpickSat" min="10" max="100" value="70" oninput="mlCpickUpdate()"></div>
+        <div class="ml-cpick-row"><div class="ml-cpick-label">Lightness</div><input type="range" class="ml-cpick-light" id="mlCpickLight" min="20" max="80" value="50" oninput="mlCpickUpdate()"></div>
+        <div class="ml-cpick-hex-row"><input type="text" class="ml-cpick-hex" id="mlCpickHex" maxlength="7" placeholder="#4a90e2" oninput="mlCpickFromHex(this.value)"><button class="ml-cpick-apply" onclick="mlColorPickerApply()">Apply</button></div>
+    </div>
+
+    <div class="ml-modal-overlay" id="locusManagerOverlay">
+        <div class="ml-modal">
+            <h3>Manage Loci</h3>
+            <div class="ml-locus-list" id="locusManagerList"></div>
+            <div class="ml-add-locus-row">
+                <input type="text" id="newLocusGene" placeholder="Label (e.g. NEUROD6)">
+                <input type="text" id="newLocusCoord" placeholder="e.g. chr7:31,376,000-31,418,000  (required)">
+                <button class="ml-btn" onclick="mlUseCurrentView()" title="Fill with IGV's current view">&#128270; Current view</button>
+                <button class="ml-btn ml-btn-primary" onclick="mlAddLocus()">Add</button>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="ml-btn" onclick="closeLocusManager()">Close</button>
+                <button class="ml-btn ml-btn-primary" onclick="closeLocusManager(); mlRender();">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let igvBrowser = null;
+        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], referenceFiles: null, pendingRefFiles: null };
+        let selectedTracks = new Set();
+        let lastClickedIndex = null;
+        let dragSourceIndex = null;
+
+        function isCustomGenome(id) { return id && id.startsWith('custom:'); }
+        function getCustomGenomeId(id) { return id ? id.replace('custom:', '') : ''; }
+
+        function populateGenomeDropdown() {
+            const select = document.getElementById('genomeSelect');
+            if (typeof CUSTOM_GENOMES === 'object' && Object.keys(CUSTOM_GENOMES).length > 0) {
+                const group = document.createElement('optgroup'); group.label = 'Custom Genomes';
+                for (const [id, genome] of Object.entries(CUSTOM_GENOMES)) {
+                    const opt = document.createElement('option'); opt.value = 'custom:' + id; opt.textContent = genome.label || id; group.appendChild(opt);
+                }
+                select.appendChild(group);
+            }
+        }
+
+        function onGenomeSelectChange() {
+            const select = document.getElementById('genomeSelect');
+            document.getElementById('customRefSection').style.display = isCustomGenome(select.value) ? 'block' : 'none';
+        }
+
+        async function buildReferenceConfig(genomeId) {
+            const id = getCustomGenomeId(genomeId);
+            const genome = CUSTOM_GENOMES[id];
+            const isFileProtocol = window.location.protocol === 'file:';
+            let reference = { id: id }; let annotationTrack = null;
+
+            if (sessionData.referenceFiles) {
+                reference.fastaURL = URL.createObjectURL(sessionData.referenceFiles.fasta);
+                if (sessionData.referenceFiles.index) reference.indexURL = URL.createObjectURL(sessionData.referenceFiles.index);
+                if (sessionData.referenceFiles.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: sessionData.referenceFiles.annotationFormat || 'gtf', url: URL.createObjectURL(sessionData.referenceFiles.annotation), displayMode: 'COLLAPSED', height: 100 };
+            } else if (genome && !isFileProtocol) {
+                reference.fastaURL = genome.fasta;
+                if (genome.index) reference.indexURL = genome.index;
+                if (genome.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: genome.annotationFormat || 'gtf', url: genome.annotation, displayMode: 'COLLAPSED', height: 100 };
+            } else if (genome && isFileProtocol) {
+                const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+                reference.fastaURL = base + genome.fasta;
+                if (genome.index) reference.indexURL = base + genome.index;
+                if (genome.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: genome.annotationFormat || 'gtf', url: base + genome.annotation, displayMode: 'COLLAPSED', height: 100 };
+            } else throw { code: 'NEEDS_FILE_PICKER', genomeId: id };
+            return { reference, annotationTrack };
+        }
+
+        function needsReferenceFilePrompt(genomeId) {
+            if (!isCustomGenome(genomeId)) return false;
+            if (sessionData.referenceFiles) return false;
+            const id = getCustomGenomeId(genomeId);
+            return !(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[id]);
+        }
+
+        let pendingRefPromptSubmit = null;
+
+        function showReferenceFilePrompt(genomeId) {
+            const statusDiv = document.getElementById('uploadStatus');
+            const id = getCustomGenomeId(genomeId);
+            const inManifest = !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[id]);
+            const picked = { fasta: null, index: null, annotation: null, annotationFormat: null };
+            const wrapper = document.createElement('div'); wrapper.className = 'status-message status-info';
+            wrapper.innerHTML = `<strong>Reference files needed</strong><br>The session uses the custom genome <em>${id}</em>. ` +
+                (inManifest && window.location.protocol === 'file:' ? 'When opening via file://, please select the reference files.' : 'Please supply the reference files.');
+            const dz = document.createElement('div'); dz.className = 'ref-prompt-drop'; dz.textContent = 'Drop FASTA / .fai / GTF or GFF here, or use the pickers below';
+            wrapper.appendChild(dz);
+            const rows = {};
+            function makeRow(key, labelText, accept) {
+                const row = document.createElement('div'); row.className = 'ref-prompt-row';
+                const lbl = document.createElement('label'); lbl.textContent = labelText;
+                const inp = document.createElement('input'); inp.type = 'file'; inp.accept = accept;
+                inp.addEventListener('change', () => { if (inp.files && inp.files[0]) applyFile(inp.files[0]); });
+                row.appendChild(lbl); row.appendChild(inp); wrapper.appendChild(row);
+                const note = document.createElement('div'); note.className = 'ref-prompt-note'; note.style.display = 'none'; wrapper.appendChild(note);
+                rows[key] = { label: lbl, input: inp, note };
+            }
+            makeRow('fasta', 'FASTA (required)', '.fa,.fasta,.fna,.fa.gz,.fasta.gz,.fna.gz');
+            makeRow('index', 'FASTA index .fai (recommended)', '.fai,.gzi');
+            makeRow('annotation', 'Annotation .gtf / .gff (optional)', '.gtf,.gff,.gff3,.gtf.gz,.gff.gz,.gff3.gz');
+            const btn = document.createElement('button'); btn.textContent = 'Launch Browser'; btn.disabled = true; btn.style.marginTop = '8px'; wrapper.appendChild(btn);
+
+            function refreshUI() {
+                btn.disabled = !picked.fasta;
+                if (picked.fasta) { rows.fasta.note.textContent = 'Selected: ' + picked.fasta.name; rows.fasta.note.style.display = ''; }
+                if (picked.index) { rows.index.note.textContent = 'Selected: ' + picked.index.name; rows.index.note.style.display = ''; }
+                if (picked.annotation) { rows.annotation.note.textContent = 'Selected: ' + picked.annotation.name + ' (' + (picked.annotationFormat || 'gtf') + ')'; rows.annotation.note.style.display = ''; }
+            }
+
+            function applyFile(f) {
+                if (/\.(fa|fasta|fna)(\.gz)?$/i.test(f.name)) picked.fasta = f;
+                else if (/\.(fai|gzi)$/i.test(f.name)) picked.index = f;
+                else if (/\.gtf(\.gz)?$/i.test(f.name)) { picked.annotation = f; picked.annotationFormat = 'gtf'; }
+                else if (/\.(gff|gff3)(\.gz)?$/i.test(f.name)) { picked.annotation = f; picked.annotationFormat = 'gff3'; }
+                refreshUI();
+            }
+
+            if (sessionData.referenceFiles) { picked.fasta = sessionData.referenceFiles.fasta; picked.index = sessionData.referenceFiles.index; picked.annotation = sessionData.referenceFiles.annotation; picked.annotationFormat = sessionData.referenceFiles.annotationFormat; }
+            if (Array.isArray(sessionData.pendingRefFiles)) sessionData.pendingRefFiles.forEach(applyFile);
+            refreshUI();
+
+            dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+            dz.addEventListener('drop', async (e) => {
+                e.preventDefault(); dz.classList.remove('drag-over');
+                const files = [];
+                if (e.dataTransfer.items) {
+                    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                        const entry = e.dataTransfer.items[i].webkitGetAsEntry ? e.dataTransfer.items[i].webkitGetAsEntry() : null;
+                        if (entry) await traverseFileTree(entry, files);
+                        else { const f = e.dataTransfer.items[i].getAsFile(); if (f) files.push(f); }
+                    }
+                } else for (let i = 0; i < e.dataTransfer.files.length; i++) files.push(e.dataTransfer.files[i]);
+                files.forEach(applyFile);
+            });
+
+            async function submit() {
+                if (!picked.fasta) return;
+                sessionData.referenceFiles = { fasta: picked.fasta, index: picked.index, annotation: picked.annotation, annotationFormat: picked.annotationFormat };
+                sessionData.pendingRefFiles = null; await launchBrowser();
+            }
+            btn.addEventListener('click', submit); pendingRefPromptSubmit = submit;
+            statusDiv.innerHTML = ''; statusDiv.appendChild(wrapper);
+        }
+
+        async function launchWithPromptedRefs() { if (pendingRefPromptSubmit) await pendingRefPromptSubmit(); }
+
+        function parseReferenceFiles(files) {
+            let fasta = null, index = null, annotation = null, annotationFormat = null;
+            for (const f of files) {
+                if (f.name.match(/\.(fa|fasta|fna)(\.gz)?$/i)) fasta = f;
+                else if (f.name.match(/\.(fai|gzi)$/i)) index = f;
+                else if (f.name.match(/\.gtf(\.gz)?$/i)) { annotation = f; annotationFormat = 'gtf'; }
+                else if (f.name.match(/\.(gff|gff3)(\.gz)?$/i)) { annotation = f; annotationFormat = 'gff3'; }
+            }
+            return fasta ? { fasta, index, annotation, annotationFormat } : null;
+        }
+
+        populateGenomeDropdown();
+
+        const dropZone = document.getElementById('dropZone');
+        dropZone.addEventListener('click', () => document.getElementById('filesInput').click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault(); dropZone.classList.remove('drag-over');
+            const items = e.dataTransfer.items; const files = [];
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i].webkitGetAsEntry();
+                if (item) await traverseFileTree(item, files);
+            }
+            if (files.length > 0) await processFiles(files);
+        });
+
+        document.getElementById('folderInput').addEventListener('change', e => processFiles(Array.from(e.target.files)));
+        document.getElementById('filesInput').addEventListener('change', e => processFiles(Array.from(e.target.files)));
+
+        async function traverseFileTree(item, files) {
+            if (item.isFile) { const file = await new Promise(r => item.file(r)); files.push(file); }
+            else if (item.isDirectory) {
+                const reader = item.createReader(); const entries = await new Promise(r => reader.readEntries(r));
+                for (const entry of entries) await traverseFileTree(entry, files);
+            }
+        }
+
+        async function processFiles(files) {
+            const statusDiv = document.getElementById('uploadStatus');
+            const fileListDiv = document.getElementById('fileList');
+            statusDiv.innerHTML = '<div class="status-message status-info">📂 Processing files...</div>';
+            fileListDiv.classList.add('hidden');
+            
+            try {
+                let configFile = null; const bigWigFiles = [], bedFiles = [], refFiles = [];
+                for (const file of files) {
+                    if (file.name === 'config.json') configFile = file;
+                    else if (file.name.match(/\.(bw|bigwig|bigWig)$/i)) bigWigFiles.push(file);
+                    else if (file.name.match(/\.bed$/i)) bedFiles.push(file);
+                    else if (file.name.match(/\.(fa|fasta|fna|fai|gzi)(\.gz)?$/i) || file.name.match(/\.(gtf|gff|gff3)(\.gz)?$/i)) refFiles.push(file);
+                }
+
+                if (bigWigFiles.length === 0 && bedFiles.length === 0) {
+                    statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload .bw, .bigWig, or .bed files.</div>'; return;
+                }
+
+                const parsedRef = parseReferenceFiles(refFiles);
+                if (parsedRef) { sessionData.referenceFiles = parsedRef; sessionData.pendingRefFiles = null; }
+                else if (refFiles.length > 0) sessionData.pendingRefFiles = refFiles;
+                else sessionData.pendingRefFiles = null;
+
+                fileListDiv.innerHTML = '<div style="font-weight: 600; margin-bottom: 8px;">Files loaded:</div>';
+                if (configFile) fileListDiv.innerHTML += '<div class="file-item">config.json</div>';
+                bigWigFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`);
+                bedFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`);
+                refFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">📎 ${f.name}</div>`);
+                fileListDiv.classList.remove('hidden');
+
+                sessionData.bigWigFiles = {};
+                for (const file of bigWigFiles) sessionData.bigWigFiles[file.name] = file;
+                for (const file of bedFiles) sessionData.bigWigFiles[file.name] = file;
+
+                if (configFile) {
+                    const config = JSON.parse(await configFile.text());
+                    sessionData.genome = config.genome || 'hg38'; sessionData.locus = config.region || null;
+                    sessionData.autoscaleGroups = config.autoscaleGroups || [];
+                    if (config.tracks) sessionData.tracks = config.tracks.map(t => ({ ...t, autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : null }));
+                    else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
+                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded!</div>';
+                } else {
+                    if (parsedRef) sessionData.genome = 'custom:' + parsedRef.fasta.name.replace(/\.(fa|fasta|fna)$/i, '');
+                    else sessionData.genome = 'hg38';
+                    sessionData.autoscaleGroups = []; sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
+                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded!</div>';
+                }
+
+                if (needsReferenceFilePrompt(sessionData.genome)) { showReferenceFilePrompt(sessionData.genome); return; }
+
+                statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
+                setTimeout(launchBrowser, 1000);
+            } catch (error) {
+                console.error('Error processing files:', error);
+                statusDiv.innerHTML = `<div class="status-message status-error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function createDefaultTracks(files) {
+            const wigColors = ['#FF0000', '#00AA00', '#0000FF', '#FF8800', '#8800FF', '#00CCCC'];
+            const bedColors = ['#5566AA', '#AA6655', '#55AA66', '#9955AA', '#AA9955', '#559999'];
+            let wigCount = 0, bedCount = 0;
+            return files.map(file => {
+                const isBed = /\.bed$/i.test(file.name);
+                return isBed ? { name: file.name.replace(/\.bed$/i, ''), file: file.name, color: bedColors[bedCount++ % bedColors.length], type: 'annotation', format: 'bed', autoscaleGroup: null }
+                             : { name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''), file: file.name, color: wigColors[wigCount++ % wigColors.length], type: 'wig', format: 'bigwig', autoscaleGroup: null };
+            });
+        }
+
+        function openAddTracksPicker() { document.getElementById('addTracksFilesInput').click(); }
+        function handleAddTracksFilesSelect(e) { const files = Array.from(e.target.files || []); e.target.value = ''; addTracksFromFiles(files); }
+        function handleAddTracksFolderSelect(e) { const files = Array.from(e.target.files || []); e.target.value = ''; addTracksFromFiles(files); }
+
+        function nextTrackColors(existingTracks, newFiles) {
+            const wigColors = ['#FF0000', '#00AA00', '#0000FF', '#FF8800', '#8800FF', '#00CCCC'];
+            const bedColors = ['#5566AA', '#AA6655', '#55AA66', '#9955AA', '#AA9955', '#559999'];
+            let wigCount = existingTracks.filter(t => t.format !== 'bed').length;
+            let bedCount = existingTracks.filter(t => t.format === 'bed').length;
+            return newFiles.map(file => /\.bed$/i.test(file.name) ? bedColors[bedCount++ % bedColors.length] : wigColors[wigCount++ % wigColors.length]);
+        }
+
+        async function addTracksFromFiles(files) {
+            if (!igvBrowser) { alert('Browser is not ready yet.'); return; }
+            const trackFiles = files.filter(f => /\.(bw|bigwig|bigWig)$/i.test(f.name) || /\.bed$/i.test(f.name));
+            if (trackFiles.length === 0) { alert('No BigWig or BED files found in the selection.'); return; }
+
+            const existingFileNames = new Set((sessionData.tracks || []).map(t => t.file));
+            const colors = nextTrackColors(sessionData.tracks || [], trackFiles);
+            const newlyAdded = [];
+
+            for (let i = 0; i < trackFiles.length; i++) {
+                const file = trackFiles[i];
+                if (existingFileNames.has(file.name)) continue;
+                const isBed = /\.bed$/i.test(file.name);
+                const displayName = isBed ? file.name.replace(/\.bed$/i, '') : file.name.replace(/\.(bw|bigwig|bigWig)$/i, '');
+                
+                let finalName = displayName, suffix = 2;
+                const usedNames = new Set(sessionData.tracks.map(t => t.name));
+                while (usedNames.has(finalName)) finalName = `${displayName} (${suffix++})`;
+
+                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', autoscaleGroup: null };
+                sessionData.bigWigFiles[file.name] = file;
+                sessionData.tracks.push(trackEntry);
+                existingFileNames.add(file.name);
+
+                const igvTrackCfg = { name: finalName, type: trackEntry.type, format: trackEntry.format, url: URL.createObjectURL(file), color: trackEntry.color, height: 50 };
+                if (isBed) igvTrackCfg.displayMode = 'COLLAPSED'; else { igvTrackCfg.autoscale = true; igvTrackCfg.min = 0; }
+
+                try {
+                    await igvBrowser.loadTrack(igvTrackCfg);
+                    newlyAdded.push(finalName);
+                } catch (err) {
+                    sessionData.tracks = sessionData.tracks.filter(t => t.name !== finalName);
+                    delete sessionData.bigWigFiles[file.name];
+                    existingFileNames.delete(file.name);
+                    alert(`Failed to load ${file.name}: ${err.message || err}`);
+                }
+            }
+
+            if (newlyAdded.length > 0) {
+                renderTrackControls();
+                if (typeof mlSyncTracksFromSession === 'function' && Array.isArray(mlState && mlState.tracks)) {
+                    mlSyncTracksFromSession();
+                    if (document.getElementById('tabMultilocus') && document.getElementById('tabMultilocus').classList.contains('active')) mlRender();
+                }
+            }
+        }
+
+        async function createNewSession() {
+            const statusDiv = document.getElementById('manualStatus');
+            const genome = document.getElementById('genomeSelect').value;
+            const location = document.getElementById('startLocation').value.trim();
+            const bigWigInput = document.getElementById('bigWigInput');
+
+            if (!genome) { statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select a genome</div>'; return; }
+            if (!bigWigInput.files || bigWigInput.files.length === 0) { statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select at least one track file</div>'; return; }
+
+            statusDiv.innerHTML = '<div class="status-message status-info">🚀 Creating session...</div>';
+
+            try {
+                sessionData.genome = genome; sessionData.locus = location || null; sessionData.bigWigFiles = {};
+                sessionData.autoscaleGroups = ['Group 1']; sessionData.referenceFiles = null;
+
+                if (isCustomGenome(genome)) {
+                    const genomeId = getCustomGenomeId(genome);
+                    const inManifest = !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[genomeId]);
+                    const fastaFile = document.getElementById('refFastaInput').files[0] || null;
+                    const faiFile   = document.getElementById('refFaiInput').files[0] || null;
+                    const gtfFile   = document.getElementById('refGtfInput').files[0] || null;
+                    if (fastaFile) {
+                        const fmt = gtfFile ? (/\.gff/i.test(gtfFile.name) ? 'gff' : 'gtf') : null;
+                        sessionData.referenceFiles = { fasta: fastaFile, index: faiFile, annotation: gtfFile, annotationFormat: fmt };
+                    } else if (!inManifest) {
+                        statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select a FASTA reference file for the custom genome</div>'; return;
+                    }
+                }
+
+                const files = Array.from(bigWigInput.files);
+                const trackFiles = files.filter(f => !f.name.match(/\.(fa|fasta|fna|fai|gtf|gff|gff3)$/i));
+                for (const file of trackFiles) sessionData.bigWigFiles[file.name] = file;
+                sessionData.tracks = createDefaultTracks(trackFiles);
+
+                statusDiv.innerHTML = '<div class="status-message status-success">✅ Session created! Launching browser...</div>';
+                setTimeout(launchBrowser, 500);
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status-message status-error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function launchBrowser() {
+            const defaultLoci = { 'hg38': 'chr17:7,661,779-7,687,550', 'hg19': 'chr17:7,571,720-7,590,868', 'mm10': 'chr11:69,580,359-69,591,873', 'mm39': 'chr11:69,379,365-69,390,879' };
+            const locus = sessionData.locus || defaultLoci[sessionData.genome] || 'all';
+            const igvOptions = { locus: locus, tracks: [] };
+            let customAnnotationTrack = null;
+
+            try {
+                if (isCustomGenome(sessionData.genome)) {
+                    const { reference, annotationTrack } = await buildReferenceConfig(sessionData.genome);
+                    igvOptions.reference = reference; customAnnotationTrack = annotationTrack;
+                } else igvOptions.genome = sessionData.genome || 'hg38';
+            } catch (error) {
+                if (error && error.code === 'NEEDS_FILE_PICKER') { showReferenceFilePrompt(error.genomeId); return; }
+                alert('Error loading custom genome: ' + (error.message || error)); return;
+            }
+
+            document.getElementById('setupView').style.display = 'none';
+            document.getElementById('browserView').classList.add('active');
+            document.getElementById('genomeDisplay').textContent = isCustomGenome(sessionData.genome) ? getCustomGenomeId(sessionData.genome) : sessionData.genome.toUpperCase();
+            
+            sessionData.trackViewIndices = [];
+            for (let i = 0; i < sessionData.tracks.length; i++) {
+                const track = sessionData.tracks[i]; const file = sessionData.bigWigFiles[track.file];
+                if (file) {
+                    const isBed = track.format === 'bed';
+                    const igvTrack = { name: track.name, type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', url: URL.createObjectURL(file), color: track.color, height: 50 };
+                    if (isBed) igvTrack.displayMode = 'COLLAPSED'; else { igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0; }
+                    igvOptions.tracks.push(igvTrack);
+                    sessionData.trackViewIndices.push(i);
+                }
+            }
+            if (customAnnotationTrack) igvOptions.tracks.push(customAnnotationTrack);
+
+            try {
+                igvBrowser = await igv.createBrowser(document.getElementById('igvContainer'), igvOptions);
+                let igvDragged = false; const igvEl = document.getElementById('igvContainer');
+                igvEl.addEventListener('mousedown', function() { igvDragged = false; });
+                igvEl.addEventListener('mousemove', function(e) { if (e.buttons > 0) igvDragged = true; });
+                igvEl.addEventListener('mouseup', function() { if (igvDragged) setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0); igvDragged = false; });
+                igvEl.addEventListener('wheel', function() { setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0); }, { passive: true });
+                renderTrackControls(); renderGroupList(); updateGroupCountDisplay();
+            } catch (error) {
+                const genomeId = getCustomGenomeId(sessionData.genome);
+                const isManifestOnFile = isCustomGenome(sessionData.genome) && window.location.protocol === 'file:' && !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[genomeId]) && !sessionData.referenceFiles;
+                if (isManifestOnFile) {
+                    igvBrowser = null; document.getElementById('igvContainer').innerHTML = ''; document.getElementById('browserView').classList.remove('active');
+                    document.getElementById('setupView').style.display = 'block'; showReferenceFilePrompt(sessionData.genome);
+                } else alert('Error loading browser: ' + (error && (error.message || error.toString()) || 'unknown error'));
+            }
+        }
+
+        function renderTrackControls() {
+            const trackList = document.getElementById('trackList'); trackList.innerHTML = '';
+            sessionData.tracks.forEach((track, index) => {
+                const trackDiv = document.createElement('div');
+                trackDiv.className = 'track-item' + (selectedTracks.has(index) ? ' selected' : '');
+                trackDiv.dataset.index = index; trackDiv.draggable = false;
+                const groupBadge = track.autoscaleGroup ? `<span class="track-group-badge has-group">${track.autoscaleGroup}</span>` : `<span class="track-group-badge">Independent</span>`;
+                trackDiv.innerHTML = `
+                    <span class="drag-handle" title="Drag to reorder">&#9776;</span>
+                    <input type="checkbox" ${selectedTracks.has(index) ? 'checked' : ''} onclick="handleTrackSelect(event, ${index})" title="Select track">
+                    <input type="color" id="colorPicker${index}" value="${track.color}" onchange="updateTrackColor(${index}, this.value)" title="Change color" style="width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px;">
+                    <input type="text" id="trackName${index}" value="${track.name}" onchange="updateTrackName(${index}, this.value)" onclick="event.stopPropagation()" style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    ${groupBadge}
+                `;
+                trackDiv.querySelector('.drag-handle').addEventListener('mousedown', () => { trackDiv.draggable = true; document.addEventListener('mouseup', () => { trackDiv.draggable = false; }, { once: true }); });
+                trackDiv.addEventListener('dragstart', handleTrackDragStart); trackDiv.addEventListener('dragover', handleTrackDragOver); trackDiv.addEventListener('drop', handleTrackDrop); trackDiv.addEventListener('dragend', handleTrackDragEnd);
+                trackList.appendChild(trackDiv);
+            });
+            updateSelectionToolbar();
+        }
+
+        function handleTrackDragStart(e) { dragSourceIndex = parseInt(e.currentTarget.dataset.index); e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragSourceIndex)); }
+        function clearDragIndicators() { document.querySelectorAll('.track-item.drag-over').forEach(el => el.classList.remove('drag-over')); }
+        function getDropTarget(e) { return e.target.closest('.track-item'); }
+        function handleTrackDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const target = getDropTarget(e); if (!target || parseInt(target.dataset.index) === dragSourceIndex) { clearDragIndicators(); return; } clearDragIndicators(); target.classList.add('drag-over'); }
+        function handleTrackDrop(e) { e.preventDefault(); clearDragIndicators(); const target = getDropTarget(e); if (!target) return; const toIndex = parseInt(target.dataset.index); if (dragSourceIndex === null || dragSourceIndex === toIndex) return; reorderTrack(dragSourceIndex, toIndex); }
+        function handleTrackDragEnd(e) { e.currentTarget.classList.remove('dragging'); e.currentTarget.draggable = false; dragSourceIndex = null; clearDragIndicators(); }
+
+        function reorderTrack(fromIndex, toIndex) {
+            const [movedTrack] = sessionData.tracks.splice(fromIndex, 1); sessionData.tracks.splice(toIndex, 0, movedTrack);
+            const newSelected = new Set();
+            selectedTracks.forEach(idx => {
+                if (idx === fromIndex) newSelected.add(toIndex);
+                else { let newIdx = idx; if (idx > fromIndex) newIdx--; if (newIdx >= toIndex) newIdx++; newSelected.add(newIdx); }
+            });
+            selectedTracks = newSelected;
+            if (lastClickedIndex !== null) {
+                if (lastClickedIndex === fromIndex) lastClickedIndex = toIndex;
+                else { let newIdx = lastClickedIndex; if (newIdx > fromIndex) newIdx--; if (newIdx >= toIndex) newIdx++; lastClickedIndex = newIdx; }
+            }
+            syncIGVTrackOrder(); renderTrackControls();
+        }
+
+        function syncIGVTrackOrder() {
+            if (!igvBrowser || !igvBrowser.trackViews) return;
+            sessionData.tracks.forEach((track, i) => {
+                for (const tv of igvBrowser.trackViews) { if (tv.track && tv.track.name === track.name) { tv.track.order = 1000 + i; break; } }
+            });
+            igvBrowser.reorderTracks();
+        }
+
+        async function updateTrackColor(index, color) {
+            sessionData.tracks[index].color = color;
+            if (igvBrowser && igvBrowser.trackViews) {
+                const trackName = sessionData.tracks[index].name;
+                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                    const tv = igvBrowser.trackViews[i];
+                    if (tv.track && tv.track.name === trackName) { tv.track.color = color; tv.repaintViews(); break; }
+                }
+            }
+        }
+
+        function updateTrackName(index, name) {
+            const oldName = sessionData.tracks[index].name; sessionData.tracks[index].name = name.trim();
+            if (igvBrowser && igvBrowser.trackViews) {
+                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                    const tv = igvBrowser.trackViews[i];
+                    if (tv.track && tv.track.name === oldName) { tv.track.name = name.trim(); tv.repaintViews(); break; }
+                }
+            }
+        }
+
+        function updateAllTrackHeights(height) {
+            const heightValue = parseInt(height);
+            if (igvBrowser && igvBrowser.trackViews) {
+                for (let i = 1; i < igvBrowser.trackViews.length; i++) {
+                    const tv = igvBrowser.trackViews[i]; if (tv && tv.track) tv.setTrackHeight(heightValue);
+                }
+            }
+        }
+
+        function handleTrackSelect(event, index) {
+            event.stopPropagation();
+            if (event.shiftKey && lastClickedIndex !== null) {
+                const start = Math.min(lastClickedIndex, index), end = Math.max(lastClickedIndex, index);
+                for (let i = start; i <= end; i++) selectedTracks.add(i);
+            } else {
+                if (selectedTracks.has(index)) selectedTracks.delete(index); else selectedTracks.add(index);
+            }
+            lastClickedIndex = index; renderTrackControls();
+        }
+
+        function clearSelection() { selectedTracks.clear(); lastClickedIndex = null; renderTrackControls(); }
+
+        function updateSelectionToolbar() {
+            const toolbar = document.getElementById('selectionToolbar'), countSpan = document.getElementById('selectedCount'), groupSelect = document.getElementById('groupAssignSelect');
+            if (selectedTracks.size > 0) {
+                toolbar.classList.add('visible'); countSpan.textContent = selectedTracks.size;
+                groupSelect.innerHTML = '<option value="">None (Independent)</option>';
+                sessionData.autoscaleGroups.forEach(group => groupSelect.innerHTML += `<option value="${group}">${group}</option>`);
+            } else toolbar.classList.remove('visible');
+        }
+
+        function assignSelectedToGroup() {
+            const groupName = document.getElementById('groupAssignSelect').value || null;
+            selectedTracks.forEach(index => {
+                sessionData.tracks[index].autoscaleGroup = groupName;
+                if (igvBrowser && igvBrowser.trackViews) {
+                    const trackName = sessionData.tracks[index].name;
+                    for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                        const tv = igvBrowser.trackViews[i]; if (tv.track && tv.track.name === trackName) { tv.track.autoscaleGroup = groupName || undefined; break; }
+                    }
+                }
+            });
+            if (igvBrowser) igvBrowser.updateViews();
+            clearSelection(); renderGroupList(); updateGroupCountDisplay();
+        }
+
+        function addNewGroup() {
+            let num = sessionData.autoscaleGroups.length + 1, newName = `Group ${num}`;
+            while (sessionData.autoscaleGroups.includes(newName)) { num++; newName = `Group ${num}`; }
+            sessionData.autoscaleGroups.push(newName);
+            updateGroupCountDisplay(); renderGroupList(); renderTrackControls();
+        }
+
+        function removeGroup(groupName) {
+            const tracksInGroup = sessionData.tracks.filter(t => t.autoscaleGroup === groupName).length;
+            if (tracksInGroup > 0 && !confirm(`"${groupName}" has ${tracksInGroup} track(s) assigned. Remove the group and set those tracks to independent scaling?`)) return;
+            const index = sessionData.autoscaleGroups.indexOf(groupName);
+            if (index > -1) sessionData.autoscaleGroups.splice(index, 1);
+            sessionData.tracks.forEach((track) => {
+                if (track.autoscaleGroup === groupName) {
+                    track.autoscaleGroup = null;
+                    if (igvBrowser && igvBrowser.trackViews) {
+                        for (let j = 0; j < igvBrowser.trackViews.length; j++) {
+                            const tv = igvBrowser.trackViews[j]; if (tv.track && tv.track.name === track.name) { tv.track.autoscaleGroup = undefined; break; }
+                        }
+                    }
+                }
+            });
+            if (igvBrowser) igvBrowser.updateViews();
+            updateGroupCountDisplay(); renderGroupList(); renderTrackControls();
+        }
+
+        function renameGroup(oldName, newName) {
+            newName = newName.trim(); if (!newName || newName === oldName) return;
+            if (sessionData.autoscaleGroups.includes(newName)) { alert(`A group named "${newName}" already exists.`); renderGroupList(); return; }
+            const index = sessionData.autoscaleGroups.indexOf(oldName);
+            if (index > -1) sessionData.autoscaleGroups[index] = newName;
+            sessionData.tracks.forEach((track) => {
+                if (track.autoscaleGroup === oldName) {
+                    track.autoscaleGroup = newName;
+                    if (igvBrowser && igvBrowser.trackViews) {
+                        for (let j = 0; j < igvBrowser.trackViews.length; j++) {
+                            const tv = igvBrowser.trackViews[j]; if (tv.track && tv.track.name === track.name) { tv.track.autoscaleGroup = newName; break; }
+                        }
+                    }
+                }
+            });
+            renderGroupList(); renderTrackControls();
+        }
+
+        function renderGroupList() {
+            const groupList = document.getElementById('groupList'); if (!groupList) return;
+            groupList.innerHTML = '';
+            sessionData.autoscaleGroups.forEach((group) => {
+                const trackCount = sessionData.tracks.filter(t => t.autoscaleGroup === group).length;
+                const groupDiv = document.createElement('div');
+                groupDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; margin-bottom: 6px;';
+                groupDiv.innerHTML = `
+                    <input type="text" value="${group}" onchange="renameGroup('${group}', this.value)" style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    <span style="font-size: 11px; color: #666; min-width: 50px;">${trackCount} track${trackCount !== 1 ? 's' : ''}</span>
+                    <button onclick="removeGroup('${group}')" class="secondary" style="padding: 4px 8px; font-size: 10px; color: #c00;" title="Remove group">✕</button>
+                `;
+                groupList.appendChild(groupDiv);
+            });
+            if (sessionData.autoscaleGroups.length === 0) groupList.innerHTML = '<p style="font-size: 11px; color: #999; font-style: italic;">No autoscale groups defined.</p>';
+        }
+
+        function updateGroupCountDisplay() { const display = document.getElementById('groupCountDisplay'); if (display) display.textContent = sessionData.autoscaleGroups.length; }
+
+        function saveSessionConfig() {
+            const config = {
+                genome: sessionData.genome, region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus, autoscaleGroups: sessionData.autoscaleGroups,
+                tracks: sessionData.tracks.map(t => ({ name: t.name, file: t.file, color: t.color, type: t.type || 'wig', format: t.format || 'bigwig', autoscaleGroup: t.autoscaleGroup || null }))
+            };
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'config.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            if (isCustomGenome(sessionData.genome)) alert('✅ Config saved!\n\nTo share with others (two options):\n\nOption A — Include reference files (works everywhere):\nPut config.json, track files, AND reference files (FASTA, FAI, GTF/GFF) in one folder and share it.\n\nOption B — Manifest only (no reference files needed):\nShare only config.json and track files. The recipient must:\n1. Have this genome in their references/ directory\n2. Have run ./references/update_manifest.sh\n3. Serve via HTTP server (e.g. python -m http.server)');
+            else alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and all BigWig files in one folder\n2. Share the folder\n3. They can drag & drop it to load everything!');
+        }
+
+        function exportImage() {
+            if (!igvBrowser) return;
+            igvBrowser.toSVG().then(svg => {
+                const blob = new Blob([svg], { type: 'image/svg+xml' }); const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url;
+                const lociResult = igvBrowser.currentLoci(); const locus = (Array.isArray(lociResult) ? lociResult[0] : lociResult).replace(/:/g, '_').replace(/,/g, '');
+                a.download = `igv_view_${locus}.svg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            });
+        }
+
+        function backToSetup() {
+            if (confirm('Are you sure? This will close the current browser session.')) {
+                if (igvBrowser) { igvBrowser.removeAllTracks(); igvBrowser = null; }
+                sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: ['Group 1'], referenceFiles: null };
+                selectedTracks.clear(); lastClickedIndex = null;
+                document.getElementById('genomeSelect').value = ''; document.getElementById('startLocation').value = ''; document.getElementById('bigWigInput').value = '';
+                document.getElementById('uploadStatus').innerHTML = ''; document.getElementById('manualStatus').innerHTML = ''; document.getElementById('fileList').classList.add('hidden');
+                document.getElementById('customRefSection').style.display = 'none';
+                document.getElementById('browserView').classList.remove('active'); document.getElementById('setupView').style.display = 'block'; document.getElementById('igvContainer').innerHTML = '';
+            }
+        }
+
+        window.addEventListener('keydown', function(e) {
+            if (!igvBrowser || !document.getElementById('browserView').classList.contains('active')) return;
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            const active = document.activeElement;
+            if (active) {
+                const tag = active.tagName.toLowerCase();
+                if (tag === 'select') return;
+                if (tag === 'input' || tag === 'textarea' || active.isContentEditable) {
+                    if (active.closest('#trackControls')) return;
+                    active.blur();
+                }
+            }
+            e.preventDefault();
+            const rf = igvBrowser.referenceFrameList && igvBrowser.referenceFrameList[0];
+            if (rf && rf.chr && typeof rf.start === 'number') {
+                const chr = rf.chr, start = Math.floor(rf.start), bpPerPixel = rf.bpPerPixel;
+                const viewportWidth = igvBrowser.trackViews[0] ? igvBrowser.trackViews[0].viewports[0].$viewport.width() : document.getElementById('igvContainer').clientWidth;
+                const end = Math.floor(rf.start + (bpPerPixel * viewportWidth)), span = end - start, shift = Math.round(span * 0.2);
+                let newStart, newEnd;
+                if (e.key === 'ArrowLeft') { newStart = Math.max(0, start - shift); newEnd = newStart + span; } else { newStart = start + shift; newEnd = end + shift; }
+                igvBrowser.search(chr + ':' + newStart + '-' + newEnd);
+                return;
+            }
+            const lociResult = igvBrowser.currentLoci(); if (!lociResult) return;
+            const locusStr = Array.isArray(lociResult) ? lociResult[0] : lociResult; if (!locusStr) return;
+            const match = locusStr.match(/^([^:]+):\s*([\d,._]+)\s*-\s*([\d,._]+)\s*$/); if (!match) return;
+            const chrom = match[1], start = Math.floor(parseFloat(match[2].replace(/[,_]/g, ''))), end = Math.floor(parseFloat(match[3].replace(/[,_]/g, ''))), span = end - start, shift = Math.round(span * 0.2);
+            let newStart, newEnd;
+            if (e.key === 'ArrowLeft') { newStart = Math.max(0, start - shift); newEnd = newStart + span; } else { newStart = start + shift; newEnd = end + shift; }
+            igvBrowser.search(chrom + ':' + newStart + '-' + newEnd);
+        }, true);
+
+        // ════════════════════════════════════════════════════════════════════
+        // MULTI-LOCUS VIEW
+        // ════════════════════════════════════════════════════════════════════
+
+        function switchTab(name) {
+            document.getElementById('tabIgv').classList.toggle('active', name === 'igv');
+            document.getElementById('tabMultilocus').classList.toggle('active', name === 'multilocus');
+            document.getElementById('tabBtnIgv').classList.toggle('active', name === 'igv');
+            document.getElementById('tabBtnMl').classList.toggle('active', name === 'multilocus');
+            if (name === 'multilocus') { mlSyncTracksFromSession(); mlRenderSidebar(); mlSeedCurrentLocus(); setTimeout(() => mlRender(), 80); }
+        }
+
+        const mlState = {
+            loci: [{ id: 1, gene: 'LOCUS 1', chr: '', start: 0, end: 0, raw: '', hiddenGenes: [] }],
+            tracks: [], trackHeight: 70, yscale: 'auto', showGene: true, showYmax: true, showLabels: true, showBorder: true,
+            activeTagFilters: new Set(), locusCounter: 10, nBins: 300,
+            showTrackBg: true, fontFamily: 'Arial, sans-serif', fontSizeGeneName: 13, fontSizeCoord: 10, fontSizeTrackLabel: 11, fontSizeYmax: 9,
+            geneModelColor: '#8a7030', geneExonColor: '#c4a84a', geneLabelColor: '#8a7030', labelColor: 'black',
+            exportColW: 260, exportScale: 1, geneModelMode: 'squished', showSpanBar: false, ymaxMode: 'max',
+        };
+
+        const ML_DEFAULT_COLORS = ['#4a90e2','#e25c5c','#50b86c','#e2924a','#9b59b6','#1abc9c','#e74c8c','#3498db','#f39c12','#2ecc71'];
+
+        function mlSyncTracksFromSession() {
+            const existing = {}; mlState.tracks.forEach(t => existing[t.name] = t);
+            mlState.tracks = sessionData.tracks.map(t => {
+                if (existing[t.name]) { existing[t.name].color = t.color; existing[t.name].file = sessionData.bigWigFiles[t.file] || null; existing[t.name].autoscaleGroup = t.autoscaleGroup || null; if (!existing[t.name].tags) existing[t.name].tags = []; return existing[t.name]; }
+                return { name: t.name, color: t.color, visible: true, file: sessionData.bigWigFiles[t.file] || null, autoscaleGroup: t.autoscaleGroup || null, tags: [], cache: {} };
+            });
+            mlRenderSidebar(); mlRenderTagFilters();
+        }
+
+        function mlRenderSidebar() {
+            const list = document.getElementById('mlClusterList'); if (!list) return;
+            list.innerHTML = mlState.tracks.map((t, i) => {
+                const tagPills = (t.tags || []).map(tag => `<span class="ml-tag-pill removable" title="click to remove" onclick="event.stopPropagation();mlRemoveTag(${i},'${tag.replace(/'/g,"\\'")}');">${tag} &times;</span>`).join('');
+                return `<div class="ml-cluster-row ${t.visible ? '' : 'hidden-track'}" style="min-width:160px;max-width:240px;">
+                    <div class="ml-cluster-meta"><span class="ml-cluster-name">${t.name}</span><div class="ml-cluster-tags">${tagPills}
+                            <form class="ml-add-tag-form" onsubmit="event.preventDefault();var v=this.querySelector('input').value.trim();if(v){mlAddTag(${i},v);this.reset();}">
+                                <input class="ml-add-tag-input" placeholder="add tag…" type="text" maxlength="24"><button class="ml-add-tag-btn" type="submit">+</button>
+                            </form></div></div>
+                    <div class="ml-cluster-color-btn" title="Change colour" style="background:${t.color}" onclick="mlColorPickerOpen(${i}, this)"></div>
+                    <span class="ml-cluster-eye" onclick="mlToggleTrack(${i})" title="Toggle visibility">${t.visible ? '👁' : '○'}</span>
+                </div>`;
+            }).join('');
+            mlRefreshStylePanelTrackColors();
+        }
+
+        function mlSetTrackColor(i, color) {
+            mlState.tracks[i].color = color;
+            const dots = document.querySelectorAll('#mlClusterList .ml-cluster-color-btn'); if (dots[i]) dots[i].style.background = color;
+            const sw = document.getElementById('mlTcSwatch_' + i); if (sw) sw.style.background = color;
+            const hx = document.getElementById('mlTcHex_' + i); if (hx) hx.value = color;
+            mlRender();
+        }
+
+        function mlRefreshStylePanelTrackColors() {
+            const el = document.getElementById('mlStyleTrackColors'); if (!el) return;
+            el.innerHTML = mlState.tracks.map((t, i) => `
+                <div class="ml-tc-row">
+                    <input type="checkbox" class="ml-tc-cb mlTcCb" data-idx="${i}" onchange="mlTcUpdateSelCount()">
+                    <div class="ml-tc-swatch" id="mlTcSwatch_${i}" style="background:${t.color};" title="Open HSL colour picker" onclick="mlColorPickerOpen(${i}, this)"><input type="color" value="${t.color}" oninput="mlSetTrackColor(${i},this.value)"></div>
+                    <span class="ml-tc-name" title="${t.name}">${t.name}</span><span class="ml-tc-tags" title="${(t.tags||[]).join(', ')}">${(t.tags||[]).join(', ')||'—'}</span>
+                    <input type="text" class="ml-tc-hex" id="mlTcHex_${i}" value="${t.color}" maxlength="7" placeholder="#rrggbb" oninput="mlTcHexInput(${i}, this.value)" onblur="mlTcHexCommit(${i}, this)">
+                </div>`).join('');
+            mlTcUpdateSelCount(); mlHsUpdateChips();
+        }
+
+        function mlTcUpdateSelCount() {
+            const cbs = document.querySelectorAll('.mlTcCb'); const n = [...cbs].filter(cb => cb.checked).length;
+            const el = document.getElementById('mlTcSelCount'); if (el) el.textContent = n + ' selected';
+            const allCb = document.getElementById('mlTcSelAll'); if (allCb) allCb.checked = (n === cbs.length && cbs.length > 0);
+        }
+        function mlTcToggleAll(checked) { document.querySelectorAll('.mlTcCb').forEach(cb => { cb.checked = checked; }); mlTcUpdateSelCount(); }
+        function mlTcHexInput(i, val) {
+            const clean = val.startsWith('#') ? val : '#' + val;
+            if (/^#[0-9a-fA-F]{6}$/.test(clean)) { mlState.tracks[i].color = clean; const sw = document.getElementById('mlTcSwatch_' + i); if (sw) sw.style.background = clean; const dots = document.querySelectorAll('#mlClusterList .ml-cluster-color-btn'); if (dots[i]) dots[i].style.background = clean; mlRender(); }
+        }
+        function mlTcHexCommit(i, el) { let val = el.value.trim(); if (!val.startsWith('#')) val = '#' + val; if (/^#[0-9a-fA-F]{6}$/.test(val)) { el.value = val.toLowerCase(); mlSetTrackColor(i, val); } else { el.value = mlState.tracks[i].color; } }
+
+        const ML_HS_HUES = [0, 18, 32, 45, 60, 80, 120, 150, 170, 200, 220, 240, 260, 280, 300, 330];
+        let mlHsSelectedHue = 200;
+
+        function mlHsUpdateChips() {
+            const chips = document.getElementById('mlHsChips'); if (!chips) return;
+            const sat = document.getElementById('mlHsSat') ? +document.getElementById('mlHsSat').value : 68;
+            const lt  = document.getElementById('mlHsLt')  ? +document.getElementById('mlHsLt').value  : 50;
+            chips.innerHTML = ML_HS_HUES.map(h => `<div class="ml-hs-chip ${h === mlHsSelectedHue ? 'sel' : ''}" style="background:hsl(${h},${sat}%,${lt}%)" onclick="mlHsSelectHue(${h})" title="${h}&deg;"></div>`).join('');
+            const currentHex = hslToHex(mlHsSelectedHue, sat, lt);
+            const prev = document.getElementById('mlHsHexPrev'), hexInp = document.getElementById('mlHsHexInput');
+            if (prev) prev.style.background = currentHex; if (hexInp && document.activeElement !== hexInp) hexInp.value = currentHex;
+        }
+
+        function mlHsSelectHue(h) { mlHsSelectedHue = h; mlHsUpdateChips(); }
+        function mlHsHexLive(val) {
+            const clean = val.startsWith('#') ? val : '#' + val; const prev = document.getElementById('mlHsHexPrev');
+            if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
+                if (prev) prev.style.background = clean; const hsl = hexToHsl(clean);
+                mlHsSelectedHue = ML_HS_HUES.reduce((best, h) => Math.abs(h - hsl.h) < Math.abs(best - hsl.h) ? h : best, ML_HS_HUES[0]);
+                const satEl = document.getElementById('mlHsSat'), ltEl = document.getElementById('mlHsLt');
+                if (satEl) { satEl.value = hsl.s; document.getElementById('mlHsSatV').textContent = hsl.s + '%'; }
+                if (ltEl)  { ltEl.value  = hsl.l; document.getElementById('mlHsLtV').textContent  = hsl.l + '%'; }
+                mlHsUpdateChips();
+            } else if (prev) prev.style.background = '#f0f0f0';
+        }
+
+        function mlHsHexCommit(el) {
+            let val = el.value.trim(); if (!val.startsWith('#')) val = '#' + val;
+            if (!/^#[0-9a-fA-F]{6}$/.test(val)) { const sat = +(document.getElementById('mlHsSat')?.value || 68); const lt = +(document.getElementById('mlHsLt')?.value || 50); el.value = hslToHex(mlHsSelectedHue, sat, lt); } else el.value = val.toLowerCase();
+        }
+
+        function mlApplyHueToSelected() {
+            const sat = +(document.getElementById('mlHsSat') ? document.getElementById('mlHsSat').value : 68), lt = +(document.getElementById('mlHsLt') ? document.getElementById('mlHsLt').value : 50);
+            const selected = [...document.querySelectorAll('.mlTcCb:checked')].map(cb => +cb.dataset.idx);
+            if (!selected.length) { alert('No tracks selected — tick checkboxes next to the tracks you want to recolour.'); return; }
+            selected.forEach((ti, rank) => { const ltFinal = selected.length > 1 ? (lt - 12) + rank * (24 / (selected.length - 1)) : lt; mlState.tracks[ti].color = hslToHex(mlHsSelectedHue, sat, Math.round(ltFinal)); });
+            mlRenderSidebar(); mlRender(); mlRefreshStylePanelTrackColors();
+        }
+
+        function mlToggleTrack(i) { mlState.tracks[i].visible = !mlState.tracks[i].visible; mlRenderSidebar(); mlRender(); }
+        function mlAddTag(i, tag) { tag = tag.trim(); if (!tag) return; if (!mlState.tracks[i].tags) mlState.tracks[i].tags = []; if (!mlState.tracks[i].tags.includes(tag)) { mlState.tracks[i].tags.push(tag); mlRenderSidebar(); mlRenderTagFilters(); } }
+        function mlRemoveTag(i, tag) { if (!mlState.tracks[i].tags) return; mlState.tracks[i].tags = mlState.tracks[i].tags.filter(t => t !== tag); const stillExists = mlState.tracks.some(t => (t.tags||[]).includes(tag)); if (!stillExists) mlState.activeTagFilters.delete(tag); mlRenderSidebar(); mlRenderTagFilters(); mlRender(); }
+        function mlRenderTagFilters() {
+            const row = document.getElementById('mlTagFilterRow'); if (!row) return;
+            const allTags = [...new Set(mlState.tracks.flatMap(t => t.tags || []))];
+            if (allTags.length === 0) { row.innerHTML = '<span style="font-size:10px;color:#bbb;">No tags yet — add tags to tracks to enable filtering</span>'; return; }
+            const pills = allTags.map(tag => { const active = mlState.activeTagFilters.has(tag); return `<span class="ml-tag-pill ${active ? 'active' : ''}" onclick="mlToggleTagFilter('${tag.replace(/'/g,"\\'")}')">${tag} ${active ? '&#x2713;' : ''}</span>`; }).join('');
+            const clearLink = mlState.activeTagFilters.size > 0 ? `<a href="#" onclick="event.preventDefault();mlState.activeTagFilters.clear();mlRenderTagFilters();mlRender();" style="font-size:10px;color:#c0392b;text-decoration:none;margin-left:6px;">clear filter</a>` : `<span style="font-size:10px;color:#aaa;margin-left:4px;">click to filter</span>`;
+            row.innerHTML = pills + clearLink;
+        }
+        function mlToggleTagFilter(tag) { if (mlState.activeTagFilters.has(tag)) mlState.activeTagFilters.delete(tag); else mlState.activeTagFilters.add(tag); mlRenderTagFilters(); mlRender(); }
+
+        // ── BigWig reading via File API ──────────────────────────────────────
+        async function readBigWigLocus(file, chr, start, end, nBins) {
+            if (!file._abCachePromise) file._abCachePromise = file.arrayBuffer();
+            const ab = await file._abCachePromise;
+            if (!ab || ab.byteLength < 64) { console.warn('BigWig: file too small or empty', ab ? ab.byteLength : 0); return null; }
+            const dv = new DataView(ab);
+            const magic = dv.getUint32(0, true), le = (magic === 0x888FFC26);
+            if (magic !== 0x888FFC26 && magic !== 0x26FC8F88) { console.warn('BigWig: bad magic', magic.toString(16), 'file size', ab.byteLength, 'file name', file.name); return null; }
+
+            const version = dv.getUint16(4, le), zoomLevels = dv.getUint16(6, le), chromTreeOffset = Number(dv.getBigUint64(8, le));
+            const fullDataOffset = Number(dv.getBigUint64(16, le)), fullIndexOffset = Number(dv.getBigUint64(24, le)), uncompressBufSize = dv.getUint32(52, le), isCompressed = uncompressBufSize > 0;
+
+            let chromId = getChromId(ab, dv, le, chromTreeOffset, chr);
+            if (chromId === null) {
+                const altChr = chr.startsWith('chr') ? chr.slice(3) : 'chr' + chr; chromId = getChromId(ab, dv, le, chromTreeOffset, altChr);
+                if (chromId !== null) console.warn('BigWig: chromosome alias match:', chr, '→', altChr);
+            }
+            if (chromId === null) { console.warn('BigWig: chromosome not found:', chr, '(tried with/without chr prefix)'); return null; }
+
+            const rangeSize = end - start, idealRes = Math.floor(rangeSize / nBins);
+            let bestZoomOffset = null, bestZoomRes = Infinity;
+            for (let z = 0; z < zoomLevels; z++) {
+                const zOff = 64 + z * 24, reductionLevel = dv.getUint32(zOff, le), dataOffset = Number(dv.getBigUint64(zOff + 8, le)), indexOffset = Number(dv.getBigUint64(zOff + 16, le));
+                if (reductionLevel >= idealRes && reductionLevel < bestZoomRes) { bestZoomRes = reductionLevel; bestZoomOffset = { dataOffset, indexOffset, reductionLevel }; }
+            }
+
+            let values = await readFullData(ab, dv, le, fullIndexOffset, chromId, start, end, nBins, isCompressed);
+            if (!values || values.every(v => v === 0)) {
+                if (bestZoomOffset && bestZoomRes <= rangeSize) values = await readZoomData(ab, dv, le, bestZoomOffset.indexOffset, chromId, start, end, nBins, isCompressed);
+            }
+            return values;
+        }
+
+        function getChromId(ab, dv, le, treeOffset, chrName) {
+            let off = treeOffset; const magic = dv.getUint32(off, le); off += 4;
+            if (magic !== 0x78CA8C91) return null;
+            const blockSize = dv.getUint32(off, le); off += 4; const keySize = dv.getUint32(off, le); off += 4; const valSize = dv.getUint32(off, le); off += 4; const itemCount = Number(dv.getBigUint64(off, le)); off += 16;
+            return searchBpTree(dv, le, off, keySize, valSize, chrName);
+        }
+
+        function searchBpTree(dv, le, nodeOffset, keySize, valSize, target) {
+            let off = nodeOffset; const isLeaf = dv.getUint8(off); off += 2; const count = dv.getUint16(off, le); off += 2;
+            const enc = new TextDecoder();
+            if (isLeaf) {
+                for (let i = 0; i < count; i++) {
+                    const keyBytes = new Uint8Array(dv.buffer, off, keySize); off += keySize;
+                    const key = enc.decode(keyBytes).replace(/\0/g,''), chromId = dv.getUint32(off, le); off += 4; const chromSize = dv.getUint32(off, le); off += 4;
+                    if (key === target) return chromId;
+                }
+            } else {
+                const childOffsets = [], childKeys = [];
+                for (let i = 0; i < count; i++) {
+                    const keyBytes = new Uint8Array(dv.buffer, off, keySize); off += keySize;
+                    const key = enc.decode(keyBytes).replace(/\0/g,''), childOff = Number(dv.getBigUint64(off, le)); off += 8;
+                    childKeys.push(key); childOffsets.push(childOff);
+                }
+                let chosen = childOffsets[0];
+                for (let i = 0; i < childKeys.length; i++) if (childKeys[i] <= target) chosen = childOffsets[i];
+                return searchBpTree(dv, le, chosen, keySize, valSize, target);
+            }
+            return null;
+        }
+
+        function readRTree(dv, le, indexOffset, chromId, start, end, collector) {
+            let off = indexOffset; const magic = dv.getUint32(off, le); off += 4;
+            if (magic !== 0x2468ACE0) return;
+            const blockSize = dv.getUint32(off, le); off += 4; const itemCount = Number(dv.getBigUint64(off, le)); off += 8;
+            const startChromIx = dv.getUint32(off, le); off += 4; const startBase = dv.getUint32(off, le); off += 4; const endChromIx = dv.getUint32(off, le); off += 4; const endBase = dv.getUint32(off, le); off += 4;
+            const fileSize = Number(dv.getBigUint64(off, le)); off += 8; const itemsPerSlot = dv.getUint32(off, le); off += 8;
+            searchRTree(dv, le, off, chromId, start, end, collector);
+        }
+
+        function searchRTree(dv, le, nodeOffset, chromId, qStart, qEnd, collector) {
+            let off = nodeOffset; const isLeaf = dv.getUint8(off); off += 2; const count = dv.getUint16(off, le); off += 2;
+            for (let i = 0; i < count; i++) {
+                const startChromIx = dv.getUint32(off, le); off += 4; const startBase = dv.getUint32(off, le); off += 4; const endChromIx = dv.getUint32(off, le); off += 4; const endBase = dv.getUint32(off, le); off += 4;
+                const chromOverlap = startChromIx <= chromId && chromId <= endChromIx;
+                if (!chromOverlap) { off += isLeaf ? 16 : 8; continue; }
+                const sameChrom = startChromIx === chromId && endChromIx === chromId, baseOverlap = !sameChrom || !(endBase <= qStart || startBase >= qEnd);
+                if (isLeaf) {
+                    const dataOffset = Number(dv.getBigUint64(off, le)); off += 8; const dataSize = Number(dv.getBigUint64(off, le)); off += 8;
+                    if (baseOverlap) collector.push({ offset: dataOffset, size: dataSize });
+                } else {
+                    const childOffset = Number(dv.getBigUint64(off, le)); off += 8;
+                    if (baseOverlap) searchRTree(dv, le, childOffset, chromId, qStart, qEnd, collector);
+                }
+            }
+        }
+
+        async function decompressBlock(ab, offset, size, isCompressed) {
+            const raw = new Uint8Array(ab, offset, size);
+            if (!isCompressed) return ab.slice(offset, offset + size);
+            for (const fmt of ['deflate', 'deflate-raw']) {
+                try {
+                    const ds = new DecompressionStream(fmt), writer = ds.writable.getWriter(), reader = ds.readable.getReader();
+                    writer.write(raw.slice()); writer.close(); const chunks = [];
+                    while (true) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); }
+                    const totalLen = chunks.reduce((s, c) => s + c.length, 0), out = new Uint8Array(totalLen); let pos = 0;
+                    for (const c of chunks) { out.set(c, pos); pos += c.length; }
+                    return out.buffer;
+                } catch (e) { }
+            }
+            return ab.slice(offset, offset + size);
+        }
+
+        async function readZoomData(ab, dv, le, indexOffset, chromId, start, end, nBins, isCompressed) {
+            const blocks = []; readRTree(dv, le, indexOffset, chromId, start, end, blocks);
+            const bins = new Float32Array(nBins), counts = new Uint16Array(nBins), binSize = (end - start) / nBins;
+            for (const blk of blocks) {
+                if (blk.offset + blk.size > ab.byteLength) continue;
+                const blockAb = await decompressBlock(ab, blk.offset, blk.size, isCompressed), bdv = new DataView(blockAb); let off = 0;
+                while (off + 32 <= blockAb.byteLength) {
+                    const cId = bdv.getUint32(off, le); off += 4; const cStart = bdv.getUint32(off, le); off += 4; const cEnd = bdv.getUint32(off, le); off += 4; const nVals = bdv.getUint32(off, le); off += 4; const minVal = bdv.getFloat32(off, le); off += 4; const maxVal = bdv.getFloat32(off, le); off += 4; const sumData = bdv.getFloat32(off, le); off += 4; const sumSq = bdv.getFloat32(off, le); off += 4;
+                    if (cId !== chromId || cEnd <= start || cStart >= end) continue;
+                    const mean = nVals > 0 ? sumData / nVals : 0, bStart = Math.floor((Math.max(cStart, start) - start) / binSize), bEnd = Math.ceil((Math.min(cEnd, end) - start) / binSize);
+                    for (let b = Math.max(0, bStart); b < Math.min(nBins, bEnd); b++) { bins[b] += mean; counts[b]++; }
+                }
+            }
+            const result = new Float32Array(nBins); let lastGood = -1;
+            for (let i = 0; i < nBins; i++) result[i] = counts[i] > 0 ? bins[i] / counts[i] : 0;
+            for (let i = 0; i < nBins; i++) {
+                if (counts[i] > 0) {
+                    if (lastGood >= 0 && i - lastGood > 1) { for (let j = lastGood + 1; j < i; j++) result[j] = result[lastGood] + (result[i] - result[lastGood]) * (j - lastGood) / (i - lastGood); }
+                    lastGood = i;
+                }
+            }
+            return result;
+        }
+
+        async function readFullData(ab, dv, le, indexOffset, chromId, start, end, nBins, isCompressed) {
+            const blocks = []; readRTree(dv, le, indexOffset, chromId, start, end, blocks);
+            const acc = new Float64Array(nBins), cnt = new Uint32Array(nBins), binSz = (end - start) / nBins;
+            for (const blk of blocks) {
+                if (blk.offset + blk.size > ab.byteLength) continue;
+                const blockAb = await decompressBlock(ab, blk.offset, blk.size, isCompressed), bdv = new DataView(blockAb); let off = 0;
+                while (off + 24 <= blockAb.byteLength) {
+                    const chromIdSec = bdv.getUint32(off, le); off += 4; const chromStart = bdv.getUint32(off, le); off += 4; const chromEnd = bdv.getUint32(off, le); off += 4; const itemStep = bdv.getUint32(off, le); off += 4; const itemSpan = bdv.getUint32(off, le); off += 4; const sType = bdv.getUint8(off); off += 2; const itemCount = bdv.getUint16(off, le); off += 2;
+                    if (chromIdSec !== chromId) { if (sType === 1) off += itemCount * 12; else if (sType === 2) off += itemCount * 8; else off += itemCount * 4; continue; }
+                    for (let i = 0; i < itemCount; i++) {
+                        let iStart, iEnd, val;
+                        if (sType === 1) { if (off + 12 > blockAb.byteLength) break; iStart = bdv.getUint32(off, le); off += 4; iEnd = bdv.getUint32(off, le); off += 4; val = bdv.getFloat32(off, le); off += 4; }
+                        else if (sType === 2) { if (off + 8 > blockAb.byteLength) break; iStart = bdv.getUint32(off, le); off += 4; iEnd = iStart + itemSpan; val = bdv.getFloat32(off, le); off += 4; }
+                        else { if (off + 4 > blockAb.byteLength) break; iStart = chromStart + i * itemStep; iEnd = iStart + itemSpan; val = bdv.getFloat32(off, le); off += 4; }
+                        if (isNaN(val) || iEnd <= start || iStart >= end) continue;
+                        const bStart = Math.floor((Math.max(iStart, start) - start) / binSz), bEnd = Math.ceil((Math.min(iEnd, end) - start) / binSz);
+                        for (let b = Math.max(0, bStart); b < Math.min(nBins, bEnd); b++) { acc[b] += val; cnt[b]++; }
+                    }
+                }
+            }
+            const result = new Float32Array(nBins); for (let i = 0; i < nBins; i++) result[i] = cnt[i] > 0 ? acc[i] / cnt[i] : 0;
+            return result;
+        }
+
+        function parseLocusString(str) {
+            const m = str.trim().match(/^(\S+):([0-9,]+)-([0-9,]+)$/);
+            return m ? { chr: m[1], start: parseInt(m[2].replace(/,/g,'')), end: parseInt(m[3].replace(/,/g,'')) } : null;
+        }
+
+        function fmtBp(n) { return n >= 1e6 ? (n/1e6).toFixed(2) + ' Mb' : n >= 1000 ? (n/1000).toFixed(0) + ' kb' : n + ' bp'; }
+        function fmtCoord(n) { return n.toLocaleString('en-US'); }
+
+        function mlSeedCurrentLocus() {
+            if (mlState.loci.some(l => l.chr && l.end > l.start)) return;
+            try {
+                if (!igvBrowser) return; const res = igvBrowser.currentLoci(); const loc = Array.isArray(res) ? res[0] : res; if (!loc) return;
+                const parsed = parseLocusString(loc); if (!parsed) return;
+                mlState.loci = [{ id: 1, gene: 'Current locus', chr: parsed.chr, start: parsed.start, end: parsed.end, raw: loc, hiddenGenes: [] }];
+            } catch(e) {}
+        }
+
+        async function openLocusManager() {
+            document.getElementById('locusManagerOverlay').classList.add('open');
+            document.getElementById('locusManagerList').innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Loading gene lists...</div>';
+            await renderLocusManagerList();
+        }
+
+        function closeLocusManager() { document.getElementById('locusManagerOverlay').classList.remove('open'); }
+
+        async function renderLocusManagerList() {
+            const el = document.getElementById('locusManagerList'); let html = '';
+            for (let i = 0; i < mlState.loci.length; i++) {
+                const l = mlState.loci[i]; let uniqueGenes = [];
+                if (l.chr && l.end > l.start) {
+                    try { const feats = await mlFetchGeneFeatures(l); uniqueGenes = [...new Set(feats.map(f => f.name).filter(Boolean))].sort(); } catch(e) {}
+                }
+                let cbHtml = uniqueGenes.length === 0 ? '<span style="font-size:11px;color:#999;">No genes found in this region.</span>' : `<div class="ml-gene-cb-list">` + uniqueGenes.map(g => {
+                    const isHidden = (l.hiddenGenes || []).includes(g);
+                    return `<label class="ml-gene-cb"><input type="checkbox" ${!isHidden ? 'checked' : ''} onchange="mlToggleGeneVisibility(${i}, '${g.replace(/'/g, "\\'")}', this.checked)"> ${g}</label>`;
+                }).join('') + `</div>`;
+
+                html += `
+                <div class="ml-locus-item">
+                    <div class="ml-locus-item-row">
+                        <span class="ml-locus-item-label">Label:</span><input type="text" value="${l.gene}" onchange="mlState.loci[${i}].gene = this.value" style="width:110px; flex:none;" placeholder="Label">
+                        <span class="ml-locus-item-label" style="width:auto;margin-left:6px;">Coords:</span><input type="text" value="${l.raw || ''}" onchange="mlUpdateLocusCoord(${i}, this.value)" placeholder="e.g. chr7:31,376,000-31,418,000">
+                        <button class="ml-remove-btn" onclick="mlRemoveLocus(${i})" title="Remove">&#x2715;</button>
+                    </div>
+                    <div class="ml-locus-item-row" style="align-items:flex-start;">
+                        <span class="ml-locus-item-label" style="width:auto; color:#4a90e2; font-weight:600; margin-top:4px;">Visible Genes:</span><div style="flex:1;">${cbHtml}</div>
+                    </div>
+                </div>`;
+            }
+            if (mlState.loci.length === 0) html = '<div style="font-size:12px; color:#888; text-align:center; padding:10px;">No loci added yet.</div>';
+            el.innerHTML = html;
+        }
+        
+        window.mlToggleGeneVisibility = function(locusIdx, geneName, isVisible) {
+            const l = mlState.loci[locusIdx]; if (!l.hiddenGenes) l.hiddenGenes = [];
+            if (isVisible) l.hiddenGenes = l.hiddenGenes.filter(g => g !== geneName);
+            else if (!l.hiddenGenes.includes(geneName)) l.hiddenGenes.push(geneName);
+        };
+
+        async function mlUpdateLocusCoord(i, val) {
+            mlState.loci[i].raw = val; const parsed = parseLocusString(val);
+            if (parsed) { mlState.loci[i].chr = parsed.chr; mlState.loci[i].start = parsed.start; mlState.loci[i].end = parsed.end; mlState.loci[i].hiddenGenes = []; document.getElementById('locusManagerList').innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Refreshing gene list...</div>'; await renderLocusManagerList(); }
+        }
+
+        async function mlRemoveLocus(i) { mlState.loci.splice(i, 1); await renderLocusManagerList(); }
+
+        async function mlAddLocus() {
+            const gene = document.getElementById('newLocusGene').value.trim(), coord = document.getElementById('newLocusCoord').value.trim();
+            if (!coord) { alert('Please enter coordinates (e.g. chr7:31,376,000-31,418,000).\nGene name alone is not sufficient — coordinates are required to fetch data.'); return; }
+            const parsed = parseLocusString(coord); if (!parsed) { alert('Could not parse coordinates. Use format: chr7:31,376,000-31,418,000 or NC_063440.1:5,291,000-5,330,000'); return; }
+            mlState.locusCounter++; mlState.loci.push({ id: mlState.locusCounter, gene: gene || coord, chr: parsed.chr, start: parsed.start, end: parsed.end, raw: coord, hiddenGenes: [] });
+            document.getElementById('newLocusGene').value = ''; document.getElementById('newLocusCoord').value = '';
+            document.getElementById('locusManagerList').innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Loading new gene list...</div>'; await renderLocusManagerList();
+        }
+
+        function mlUseCurrentView() {
+            if (!igvBrowser) { alert('IGV browser not loaded.'); return; }
+            const rf = igvBrowser.referenceFrameList && igvBrowser.referenceFrameList[0]; if (!rf || !rf.chr) { alert('Could not read current IGV view.'); return; }
+            const start = Math.floor(rf.start), vpWidth = igvBrowser.trackViews && igvBrowser.trackViews[0] ? igvBrowser.trackViews[0].viewports[0].$viewport.width() : document.getElementById('igvContainer').clientWidth;
+            document.getElementById('newLocusCoord').value = rf.chr + ':' + fmtCoord(start) + '-' + fmtCoord(Math.floor(rf.start + (rf.bpPerPixel * vpWidth)));
+        }
+
+        async function mlRender() {
+            Object.keys(mlGeneFeatureCache).forEach(k => { if (!mlState.loci.some(l => l.chr === k)) delete mlGeneFeatureCache[k]; });
+            const container = document.getElementById('mlBrowser'), activeTags = mlState.activeTagFilters || new Set(), visibleTracks = mlState.tracks.filter(t => t.visible && (activeTags.size === 0 || (t.tags || []).some(tag => activeTags.has(tag)))), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
+            if (visibleTracks.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">🔬</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No tracks visible</div><div style="font-size:12px;max-width:36ch;margin:0 auto;line-height:1.7;">Load BigWig files in the <strong>IGV Browser</strong> tab, or clear active tag filters.</div></div>'; return; }
+            if (loci.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">📍</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No loci configured</div><div style="font-size:12px;max-width:38ch;margin:0 auto 20px;line-height:1.7;">Add gene loci as columns using the button below.</div><button onclick="openLocusManager()" style="padding:8px 20px;background:#4a90e2;color:white;border:none;border-radius:4px;font-size:13px;cursor:pointer;">+ Add Loci</button></div>'; return; }
+
+            const showLabels = mlState.showLabels !== false, showBorder = mlState.showBorder !== false, labelW = showLabels ? 90 : 0, borderClass = showBorder ? '' : ' no-border', gridCols = loci.map(() => '1fr').join(' '), th = mlState.trackHeight;
+            const ff = mlState.fontFamily || 'Arial, sans-serif', fsGene = mlState.fontSizeGeneName || 13, fsLocusGene = mlState.fontSizeLocusGene || 13, fsCoord = mlState.fontSizeCoord || 10, fsTLabel = mlState.fontSizeTrackLabel || 11, fsYmax = mlState.fontSizeYmax || 9;
+
+            let html = `<div class="ml-locus-header">`; if (showLabels) html += `<div class="ml-locus-header-label" style="width:${labelW}px"></div>`; html += `<div class="ml-locus-header-inner" style="grid-template-columns:${gridCols}">`;
+            loci.forEach(l => { const span = l.end - l.start, coordText = mlState.showSpanBar ? `${l.chr}:${fmtCoord(l.start)}&ndash;${fmtCoord(l.end)}` : `${l.chr}:${fmtCoord(l.start)}&ndash;${fmtCoord(l.end)} (${fmtBp(span)})`, spanBar = mlState.showSpanBar ? `<div class="ml-span-bar"><div class="ml-span-bar-line"></div><span>${fmtBp(span)}</span><div class="ml-span-bar-line"></div></div>` : ''; html += `<div class="ml-locus-cell"><div class="ml-locus-gene" style="font-size:${fsLocusGene}px;font-family:${ff};">${l.gene}</div><div class="ml-locus-coord" style="font-size:${fsCoord}px;font-family:${ff};">${coordText}</div>${spanBar}</div>`; });
+            html += `</div></div>`;
+
+            visibleTracks.forEach((track, ti) => {
+                html += `<div class="ml-track-row${borderClass}">`;
+                if (showLabels) { const labelColor = mlState.labelColor === 'track' ? track.color : '#3a4252'; html += `<div class="ml-label-col" style="width:${labelW}px;height:${th}px"><div class="ml-track-label" title="${track.name}" style="font-size:${fsTLabel}px;font-family:${ff};color:${labelColor};">${track.name}</div><div class="ml-track-label-pill" style="background:${track.color};height:${th - 8}px;"></div></div>`; }
+                html += `<div class="ml-track-inner" style="grid-template-columns:${gridCols}">`;
+                loci.forEach((locus, li) => { html += `<div class="ml-track-cell" style="height:${th}px"><canvas class="ml-track-canvas" data-ti="${ti}" data-li="${li}" width="400" height="${th}" style="height:${th}px"></canvas>${mlState.showYmax ? `<span class="ml-ymax" id="ymax_${ti}_${li}" style="font-size:${fsYmax}px;font-family:${ff};">&#x2026;</span>` : ''}</div>`; });
+                html += `</div></div>`;
+            });
+
+            if (mlState.showGene) { html += `<div class="ml-gene-row">`; if (showLabels) html += `<div class="ml-locus-header-label" style="width:${labelW}px"></div>`; html += `<div class="ml-gene-inner" style="grid-template-columns:${gridCols}">`; loci.forEach((locus, li) => { html += `<div class="ml-gene-cell"><svg data-gene-li="${li}" class="ml-gene-svg" preserveAspectRatio="none"></svg></div>`; }); html += `</div></div>`; }
+            container.innerHTML = html;
+
+            const binGrid = [];
+            await Promise.all(visibleTracks.map(async (track, ti) => { binGrid[ti] = []; await Promise.all(loci.map(async (locus, li) => { if (!track.file || /\.bed$/i.test(track.file.name)) { binGrid[ti][li] = null; return; } try { binGrid[ti][li] = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { binGrid[ti][li] = null; } })); }));
+
+            const mode = mlState.yscale, ymaxGrid = visibleTracks.map((_, ti) => loci.map((_, li) => { const b = binGrid[ti][li]; return (b && b.some(v => v > 0)) ? Math.max(...b) : 1; }));
+            if (mode === 'row') visibleTracks.forEach((_, ti) => { const rowMax = Math.max(...loci.map((_, li) => ymaxGrid[ti][li])); loci.forEach((_, li) => { ymaxGrid[ti][li] = rowMax; }); });
+            else if (mode === 'group') loci.forEach((_, li) => { const gm = {}; visibleTracks.forEach((t, ti) => { const g = t.autoscaleGroup; if (g) gm[g] = Math.max(gm[g]||0, ymaxGrid[ti][li]); }); visibleTracks.forEach((t, ti) => { if (t.autoscaleGroup && gm[t.autoscaleGroup]) ymaxGrid[ti][li] = gm[t.autoscaleGroup]; }); });
+            else if (mode === 'group-row') { const gm = {}; visibleTracks.forEach((t, ti) => { const g = t.autoscaleGroup; if (!g) return; loci.forEach((_, li) => { gm[g] = Math.max(gm[g]||0, ymaxGrid[ti][li]); }); }); visibleTracks.forEach((t, ti) => { if (t.autoscaleGroup && gm[t.autoscaleGroup]) loci.forEach((_, li) => { ymaxGrid[ti][li] = gm[t.autoscaleGroup]; }); }); }
+            else if (mode === 'global') { let gMax = 1; visibleTracks.forEach((_, ti) => loci.forEach((_, li) => { gMax = Math.max(gMax, ymaxGrid[ti][li]); })); visibleTracks.forEach((_, ti) => loci.forEach((_, li) => { ymaxGrid[ti][li] = gMax; })); }
+
+            container.querySelectorAll('canvas[data-ti]').forEach(canvas => { const ti = +canvas.dataset.ti, li = +canvas.dataset.li; mlPaintTrack(canvas, ti, li, visibleTracks, loci, binGrid[ti][li], ymaxGrid[ti][li]); });
+
+            if (mlState.showGene) {
+                requestAnimationFrame(async () => {
+                    const geneSvgs = Array.from(container.querySelectorAll('svg[data-gene-li]'));
+                    const featuresPerLocus = await Promise.all(loci.map(async locus => { let feats = await mlFetchGeneFeatures(locus).catch(() => []); if (locus.hiddenGenes && locus.hiddenGenes.length > 0) feats = feats.filter(f => !f.name || !locus.hiddenGenes.includes(f.name)); return feats; }));
+                    const gfs = mlState.fontSizeGeneName || 13, ff = mlState.fontFamily || 'Arial, sans-serif'; let sharedNRows = 1;
+                    geneSvgs.forEach(svg => { const li = +svg.dataset.geneLi, locus = loci[li], cell = svg.closest('.ml-gene-cell'), cssW = cell ? cell.getBoundingClientRect().width : (svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0) || 400, n = mlComputeGeneRows(locus, featuresPerLocus[li], cssW, gfs, ff); if (n > sharedNRows) sharedNRows = n; });
+                    geneSvgs.forEach(svg => mlDrawGeneModelSVG(svg, loci[+svg.dataset.geneLi], featuresPerLocus[+svg.dataset.geneLi], sharedNRows));
+                });
+            }
+        }
+
+
+        async function mlPaintBedTrack(ctx, file, locus, W, H, color) {
+            ctx.fillStyle = mlState.showTrackBg ? '#fafafa' : '#ffffff'; ctx.fillRect(0, 0, W, H);
+            try {
+                const text = await file.text(), lines = text.split('\n'), rangeSize = locus.end - locus.start, hex = color.replace('#',''), r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16); let row = 0;
+                for (const line of lines) {
+                    if (line.startsWith('#') || line.startsWith('track') || line.startsWith('browser') || !line.trim()) continue;
+                    const cols = line.split('\t'), chr = cols[0]; if (chr !== locus.chr) continue;
+                    const s = parseInt(cols[1]), e = parseInt(cols[2]); if (e <= locus.start || s >= locus.end) continue;
+                    const x1 = ((s - locus.start) / rangeSize) * W, x2 = ((e - locus.start) / rangeSize) * W, rh = 8, ry = 2 + (row % Math.max(1, Math.floor((H - 4) / rh))) * rh;
+                    ctx.fillStyle = `rgba(${r},${g},${b},0.7)`; ctx.fillRect(Math.max(0, x1), ry, Math.min(W, x2) - Math.max(0, x1), rh - 2); row++;
+                }
+            } catch(e) { ctx.fillStyle = '#bbb'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('BED read error', W/2, H/2 + 4); }
+        }
+
+        async function mlPaintTrack(canvas, ti, li, visibleTracks, loci, preloadedBins, preloadedYmax) {
+            const track = visibleTracks[ti], locus = loci[li], W = canvas.offsetWidth || canvas.parentElement && canvas.parentElement.offsetWidth || 400, H = canvas.height; canvas.width = W;
+            const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, W, H); ctx.fillStyle = mlState.showTrackBg ? '#fafafa' : '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#ddd'; ctx.fillRect(0, H-2, W, 2);
+            if (track.file && /\.bed$/i.test(track.file.name)) { await mlPaintBedTrack(ctx, track.file, locus, W, H, track.color); return; }
+
+            let bins = preloadedBins !== undefined ? preloadedBins : null, readError = null;
+            if (bins === null) { if (track.file) try { bins = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { readError = e; } }
+
+            if (!bins || bins.every(v => v === 0)) { ctx.fillStyle = mlState.showTrackBg ? '#eee' : '#f8f8f8'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#bbb'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText(readError ? 'read error' : (!track.file ? 'no file' : 'no data'), W/2, H/2 + 4); return; }
+
+            let ymax = (preloadedYmax !== undefined && preloadedYmax > 0) ? preloadedYmax : Math.max(...bins); if (ymax <= 0) ymax = 1;
+            const ymaxEl = document.getElementById('ymax_' + ti + '_' + li); if (ymaxEl) ymaxEl.textContent = (mlState.ymaxMode === 'range') ? `0\u2013${ymax.toFixed(2)}` : ymax.toFixed(2);
+
+            const hex = track.color.replace('#',''), r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16), nBins = bins.length, bw = W / nBins;
+            ctx.fillStyle = track.color;
+            for (let i = 0; i < nBins; i++) { if (bins[i] <= 0) continue; const x = Math.floor(i * bw), nextX = Math.floor((i + 1) * bw), barW = Math.max(1, nextX - x), barH = Math.round((bins[i] / ymax) * (H - 2)); ctx.fillRect(x, H - barH, barW, barH); }
+            ctx.strokeStyle = `rgba(${r},${g},${b},0.35)`; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0, H - 1); ctx.lineTo(W, H - 1); ctx.stroke();
+            ctx.strokeStyle = `rgba(${r},${g},${b},0.25)`; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0, H-1); ctx.lineTo(W, H-1); ctx.stroke();
+        }
+
+        const mlGeneFeatureCache = {};
+
+        async function mlFetchGeneFeatures(locus) {
+            const chrKey = locus.chr; if (mlGeneFeatureCache[chrKey]) return mlGeneFeatureCache[chrKey].filter(f => f.end > locus.start && f.start < locus.end);
+            let chrFeatures = [];
+            if (igvBrowser && igvBrowser.trackViews) {
+                for (const tv of igvBrowser.trackViews) {
+                    const t = tv.track; if (!t) continue;
+                    if (t.type === 'annotation' || t.type === 'gene' || (t.config && (t.config.type === 'annotation' || t.config.format === 'gtf' || t.config.format === 'gff3' || t.config.format === 'gff'))) { try { const raw = await t.getFeatures(locus.chr, 0, 300000000); if (raw && raw.length > 0) { chrFeatures = raw; break; } } catch(e) {} }
+                }
+            }
+            if (chrFeatures.length === 0 && sessionData.referenceFiles && sessionData.referenceFiles.annotation) { try { chrFeatures = await mlParseAnnotationFile(sessionData.referenceFiles.annotation, sessionData.referenceFiles.annotationFormat || 'gtf', locus.chr, 0, 300000000); } catch(e) {} }
+            mlGeneFeatureCache[chrKey] = chrFeatures; return chrFeatures.filter(f => f.end > locus.start && f.start < locus.end);
+        }
+
+        async function mlParseAnnotationFile(file, format, chr, start, end) {
+            const text = await file.text(), lines = text.split('\n'), transcripts = {};
+            for (const line of lines) {
+                if (!line || line.startsWith('#')) continue; const f = line.split('\t'); if (f.length < 9) continue;
+                if (f[0] !== chr && f[0] !== chr.replace('chr','') && 'chr'+f[0] !== chr) continue;
+                const fStart = parseInt(f[3]) - 1, fEnd = parseInt(f[4]); if (fEnd < start || fStart > end) continue;
+                const type = f[2], strand = f[6], attrs = f[8], getAttr = (key) => { const m = attrs.match(new RegExp(key + '[= ]"?([^";\t]+)"?')); return m ? m[1].trim() : null; };
+                if (format === 'gtf') {
+                    const txId = getAttr('transcript_id') || getAttr('gene_id') || 'unknown';
+                    if (type === 'transcript' || type === 'mRNA') { if (!transcripts[txId]) transcripts[txId] = { chr: f[0], start: fStart, end: fEnd, strand, name: getAttr('gene_name') || getAttr('gene_id') || txId, exons: [] }; }
+                    else if (type === 'gene') { const geneId = getAttr('gene_id') || 'unknown'; if (!transcripts[geneId]) transcripts[geneId] = { chr: f[0], start: fStart, end: fEnd, strand, name: getAttr('gene_name') || geneId, exons: [] }; }
+                    else if (type === 'exon') { if (!transcripts[txId]) transcripts[txId] = { chr: f[0], start: fStart, end: fEnd, strand, name: getAttr('gene_name') || txId, exons: [] }; transcripts[txId].exons.push({ start: fStart, end: fEnd }); }
+                } else {
+                    const id = getAttr('ID') || getAttr('Parent') || 'unknown';
+                    if (type === 'mRNA' || type === 'transcript') { if (!transcripts[id]) transcripts[id] = { chr: f[0], start: fStart, end: fEnd, strand, name: getAttr('Name') || getAttr('gene_name') || id, exons: [] }; }
+                    else if (type === 'exon') { const parent = getAttr('Parent') || id; if (!transcripts[parent]) transcripts[parent] = { chr: f[0], start: fStart, end: fEnd, strand, name: parent, exons: [] }; transcripts[parent].exons.push({ start: fStart, end: fEnd }); }
+                }
+            }
+            return Object.values(transcripts);
+        }
+
+        function mlDrawGeneModelSVG(svg, locus, features, sharedNRows) {
+            const ff = mlState.fontFamily || 'Arial, sans-serif', mc = mlState.geneModelColor || '#6b5a2e', exonCol = mlState.geneExonColor || '#c4a84a', labelCol = mlState.geneLabelColor || '#3a3320', gfs = mlState.fontSizeGeneName || 13, lfs = Math.max(8, gfs - 3);
+            const overlapping = (features || []).filter(f => f.end > locus.start && f.start < locus.end), cell = svg.closest('.ml-gene-cell'), cssW = cell ? cell.getBoundingClientRect().width : (svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0) || 400, span = Math.max(1, locus.end - locus.start), bp2x = bp => Math.max(0, Math.min(cssW, (bp - locus.start) / span * cssW));
+            const geneMap = {};
+            overlapping.forEach(f => { const key = f.name || (f.chr + ':' + f.start); if (!geneMap[key]) geneMap[key] = { ...f, exons: f.exons ? [...f.exons] : [] }; else { if (f.start < geneMap[key].start) geneMap[key].start = f.start; if (f.end > geneMap[key].end) geneMap[key].end = f.end; if (f.exons) geneMap[key].exons.push(...f.exons); } });
+            const genes = Object.values(geneMap).sort((a,b) => a.start - b.start), ROW_H = 20, ROW_GAP = 14, TOP_PAD = 14, BOTTOM_PAD = 26;
+            const tempCtx = document.createElement('canvas').getContext('2d'); tempCtx.font = `700 ${lfs}px ${ff}`;
+            const rowEnds = [];
+            genes.forEach(g => {
+                const x1 = bp2x(g.start), x2 = bp2x(g.end), textWidth = g.name ? tempCtx.measureText(g.name).width : 0;
+                let tx = x2 + 6, anchor = 'start', neededStart = x1, neededEnd = x2;
+                if (g.name) { if (tx + textWidth <= cssW - 2) neededEnd = tx + textWidth; else { tx = Math.max(2, x1 - 6); anchor = 'end'; neededStart = Math.max(0, tx - textWidth); } }
+                let row = rowEnds.findIndex(e => e < neededStart - 4); if (row === -1) { row = rowEnds.length; rowEnds.push(0); }
+                rowEnds[row] = Math.max(neededEnd, x2); g._row = row; g._tx = tx; g._anchor = anchor;
+            });
+            const nRows = Math.max(1, sharedNRows || rowEnds.length || 1), cssH = TOP_PAD + nRows * ROW_H + (nRows - 1) * ROW_GAP + BOTTOM_PAD;
+            svg.setAttribute('viewBox', `0 0 ${Math.max(1, cssW)} ${cssH}`); svg.dataset.geneHeight = String(cssH); svg.setAttribute('width', '100%'); svg.setAttribute('height', cssH); svg.innerHTML = '';
+            const ns = 'http://www.w3.org/2000/svg', add = (name, attrs) => { const el = document.createElementNS(ns, name); for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v); svg.appendChild(el); return el; };
+            if (!features || !features.length || !overlapping.length) { add('line', { x1: 0, y1: cssH/2, x2: Math.max(1, cssW), y2: cssH/2, stroke: '#dde2ea', 'stroke-width': 1 }); add('text', { x: cssW/2, y: cssH/2 + 4, 'text-anchor': 'middle', fill: '#9aa3b8', 'font-size': 11, 'font-family': ff }).textContent = 'no annotation'; return; }
+            genes.forEach(g => {
+                const row = g._row || 0, midY = TOP_PAD + row * (ROW_H + ROW_GAP) + ROW_H / 2, x1 = bp2x(Math.max(g.start, locus.start)), x2 = bp2x(Math.min(g.end, locus.end));
+                add('line', { x1, y1: midY, x2, y2: midY, stroke: mc, 'stroke-width': 1 });
+                const exons = g.exons && g.exons.length ? g.exons : [{ start: g.start, end: g.end }];
+                exons.forEach(ex => { const ex1 = bp2x(Math.max(ex.start, locus.start)), ex2 = bp2x(Math.min(ex.end, locus.end)); if (ex2 > ex1) add('rect', { x: ex1, y: midY - 5, width: Math.max(2, ex2 - ex1), height: 10, fill: exonCol }); });
+                add('text', { x: g._tx, y: midY, 'text-anchor': g._anchor, fill: labelCol, 'font-size': lfs, 'font-family': ff, 'font-weight': '700', 'dominant-baseline': 'central' }).textContent = g.name || '';
+                const arrowStep = Math.max(24, (x2 - x1) / 5);
+                for (let ax = x1 + arrowStep * 0.4; ax < x2 - 4; ax += arrowStep) add('polygon', { points: `${ax - 2.5},${midY - 1.8} ${ax + 2.5},${midY} ${ax - 2.5},${midY + 1.8}`, fill: mc });
+            });
+        }
+
+        function mlComputeGeneRows(locus, features, cssW, gfs, ff) {
+            const overlapping = (features || []).filter(f => f.end > locus.start && f.start < locus.end); if (overlapping.length === 0) return 1;
+            const span = locus.end - locus.start, geneMap = {};
+            overlapping.forEach(f => { const key = f.name || (f.chr + ':' + f.start); if (!geneMap[key]) geneMap[key] = { start: f.start, end: f.end, name: f.name }; else { if (f.start < geneMap[key].start) geneMap[key].start = f.start; if (f.end > geneMap[key].end) geneMap[key].end = f.end; } });
+            const genes = Object.values(geneMap).sort((a, b) => a.start - b.start), rowEnds = [], bp2x = bp => Math.max(0, Math.min(cssW, (bp - locus.start) / span * cssW)), lfs = Math.max(8, gfs - 3);
+            const tempCtx = document.createElement('canvas').getContext('2d'); tempCtx.font = `700 ${lfs}px ${ff}`;
+            genes.forEach(g => {
+                const x1 = bp2x(g.start), x2 = bp2x(g.end), textWidth = g.name ? tempCtx.measureText(g.name).width : 0;
+                let neededStart = x1, neededEnd = x2;
+                if (g.name) { if (x2 + 6 + textWidth <= cssW) neededEnd = x2 + 6 + textWidth; else neededStart = Math.max(0, x1 - 6 - textWidth); }
+                let row = rowEnds.findIndex(e => e < neededStart - 4); if (row === -1) { row = rowEnds.length; rowEnds.push(0); } rowEnds[row] = neededEnd;
+            });
+            return rowEnds.length || 1;
+        }
+
+        function mlExportSVG() {
+            const visibleTracks = mlState.tracks.filter(t => t.visible), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
+            if (!visibleTracks.length || !loci.length) { alert('Nothing to export.'); return; }
+            const trackW = mlState.exportColW || 260, scale = mlState.exportScale || 2, gap = 10, pillW = 5, ff = (mlState.fontFamily || 'Arial, sans-serif').replace(/'/g, ''), fsGene = mlState.fontSizeGeneName || 13, fsCoord = mlState.fontSizeCoord || 10, fsYmax = mlState.fontSizeYmax || 9, fsTLabel = mlState.fontSizeTrackLabel || 11;
+            let labelW = 0;
+            if (mlState.showLabels) {
+                const _mc = document.createElement('canvas').getContext('2d'); _mc.font = `${fsTLabel}px ${ff}`;
+                visibleTracks.forEach(t => labelW = Math.max(labelW, _mc.measureText(t.name).width)); labelW = Math.ceil(labelW) + pillW + 16;
+            }
+            const th = mlState.trackHeight, headerH = 46, _geneSvg = document.querySelector('svg[data-gene-li]'), geneH = mlState.showGene ? (_geneSvg ? +_geneSvg.dataset.geneHeight || _geneSvg.getBoundingClientRect().height : 52) : 0;
+            const totalW = labelW + loci.length * (trackW + gap) - gap + 10, totalH = headerH + visibleTracks.length * (th + 2) + (mlState.showGene ? geneH + 6 : 0) + 10, sw = totalW * scale, sh = totalH * scale;
+
+            let svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${sw}" height="${sh}" viewBox="0 0 ${totalW} ${totalH}">\n<rect width="${totalW}" height="${totalH}" fill="white" stroke="none"/>\n<style>text{font-family:${ff}}</style>`;
+            loci.forEach((l, li) => {
+                const span = l.end - l.start, cx = labelW + li * (trackW + gap) + trackW / 2, coordText = mlState.showSpanBar ? `${l.chr}:${fmtCoord(l.start)}-${fmtCoord(l.end)}` : `${l.chr}:${fmtCoord(l.start)}-${fmtCoord(l.end)} (${fmtBp(span)})`;
+                svg += `<text x="${cx}" y="18" text-anchor="middle" font-size="${fsGene}" font-weight="700" font-style="italic" fill="#1a1d23">${l.gene}</text><text x="${cx}" y="32" text-anchor="middle" font-size="${fsCoord}" fill="#8a94a8" font-family="monospace">${coordText}</text>`;
+                if (mlState.showSpanBar) {
+                    const xL = labelW + li * (trackW + gap), xR = xL + trackW, label = fmtBp(span), mid = (xL + xR) / 2;
+                    svg += `<line x1="${xL+2}" y1="39" x2="${mid-18}" y2="39" stroke="#8a94a8" stroke-width="0.75"/><line x1="${mid+18}" y1="39" x2="${xR-2}" y2="39" stroke="#8a94a8" stroke-width="0.75"/><text x="${mid}" y="42" text-anchor="middle" font-size="8" fill="#8a94a8" font-family="monospace">${label}</text><polygon points="${xL+2},39 ${xL+7},36.5 ${xL+7},41.5" fill="#8a94a8"/><polygon points="${xR-2},39 ${xR-7},36.5 ${xR-7},41.5" fill="#8a94a8"/>`;
+                } else svg += `<line x1="${labelW + li*(trackW+gap)}" y1="40" x2="${labelW + li*(trackW+gap)+trackW}" y2="40" stroke="#dde2ea" stroke-width="0.75"/>`;
+            });
+
+            visibleTracks.forEach((track, ti) => {
+                const y = headerH + ti * (th + 2), labelColor = mlState.labelColor === 'track' ? track.color : '#3a4252';
+                if (mlState.showLabels) { svg += `<rect x="${labelW - pillW - 4}" y="${y+4}" width="${pillW}" height="${th-8}" rx="2" fill="${track.color}"/><text x="${labelW - pillW - 8}" y="${y + th/2 + fsTLabel*0.35}" text-anchor="end" font-size="${fsTLabel}" fill="${labelColor}">${track.name}</text>`; }
+                loci.forEach((locus, li) => {
+                    const x = labelW + li * (trackW + gap), canvas = document.querySelector(`canvas[data-ti="${ti}"][data-li="${li}"]`); if (!canvas) return;
+                    try { const dataUrl = canvas.toDataURL('image/png'); svg += `<image x="${x}" y="${y}" width="${trackW}" height="${th}" href="${dataUrl}" preserveAspectRatio="none"/>`; if (mlState.showBorder) svg += `<rect x="${x}" y="${y}" width="${trackW}" height="${th}" fill="none" stroke="#edf0f5" stroke-width="0.5"/>`; } catch(e) {}
+                    if (mlState.showYmax) { const el = document.getElementById('ymax_' + ti + '_' + li); if (el && el.textContent !== '…') svg += `<text x="${x+trackW-3}" y="${y+fsYmax+2}" text-anchor="end" font-size="${fsYmax}" fill="#c0c8d8" font-family="monospace">${el.textContent}</text>`; }
+                });
+            });
+
+            if (mlState.showGene) {
+                const geneY = headerH + visibleTracks.length * (th + 2) + 14, geneCells = Array.from(document.getElementById('mlBrowser').querySelectorAll('.ml-gene-cell'));
+                geneCells.forEach((cell, li) => {
+                    const svgEl = cell.querySelector('svg[data-gene-li]'); if (!svgEl) return;
+                    const x = labelW + li * (trackW + gap), w = cell.getBoundingClientRect().width || trackW, h = Math.max(90, +(svgEl.dataset.geneHeight || 0) || 90);
+                    svg += `<g transform="translate(${x},${geneY})"><svg xmlns="http://www.w3.org/2000/svg" width="${trackW}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${svgEl.innerHTML}</svg></g>`;
+                });
+            }
+
+            svg += `</svg>`;
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = 'multilocus_view.svg'; a.click();
+        }
+
+        window.addEventListener('resize', function() {
+            clearTimeout(window._mlResizeTimer);
+            window._mlResizeTimer = setTimeout(function() { if (document.getElementById('tabMultilocus') && document.getElementById('tabMultilocus').classList.contains('active')) mlRender(); }, 200);
+        });
+
+    </script>
+</body>
+</html>
