@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IGV Genome Browser</title>
-    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.8/dist/igv.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.8/dist/igv.min.js"
+            integrity="sha384-wO9ExEC+sA5bpZljqGnUEKOkbsJcseYDVSONmYLaIWsNIRbG/xIefGLXCjVyNuE9"
+            crossorigin="anonymous"></script>
     <script>var CUSTOM_GENOMES = {};</script>
-    <script src="references/manifest.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f0f2f5; color: #1a1d23; }
@@ -247,8 +248,9 @@
                 <strong>📋 How to share sessions with collaborators:</strong>
                 1. Load your BigWig files and configure track names/colors<br>
                 2. Click "Save Session Config" to download config.json<br>
-                3. Share a folder containing config.json + all BigWig files<br>
-                4. Recipients can drag & drop the entire folder to load everything with your exact settings!
+                3. Share a folder containing config.json + all BigWig/BED files<br>
+                4. Recipients can drag &amp; drop the entire folder to load everything with your exact settings!<br>
+                <span style="color:#2c5d7f;"><strong>Custom genomes:</strong> also include your FASTA, .fai index, and GTF/GFF annotation files in the shared folder — they will be detected automatically.</span>
             </div>
 
             <div class="setup-card">
@@ -299,6 +301,7 @@
                             <option value="hg19">Human (GRCh37/hg19)</option>
                             <option value="mm10">Mouse (GRCm38/mm10)</option>
                             <option value="mm39">Mouse (GRCm39/mm39)</option>
+                            <option value="custom:__user__">Custom genome…</option>
                         </select>
                     </div>
 
@@ -599,6 +602,14 @@
         let lastClickedIndex = null;
         let dragSourceIndex = null;
 
+        const _objectURLs = new Set();
+        function mkObjectURL(blob) { const u = URL.createObjectURL(blob); _objectURLs.add(u); return u; }
+        function revokeAllObjectURLs() { _objectURLs.forEach(u => URL.revokeObjectURL(u)); _objectURLs.clear(); }
+
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
         function isCustomGenome(id) { return id && id.startsWith('custom:'); }
         function getCustomGenomeId(id) { return id ? id.replace('custom:', '') : ''; }
 
@@ -621,22 +632,16 @@
         async function buildReferenceConfig(genomeId) {
             const id = getCustomGenomeId(genomeId);
             const genome = CUSTOM_GENOMES[id];
-            const isFileProtocol = window.location.protocol === 'file:';
             let reference = { id: id }; let annotationTrack = null;
 
             if (sessionData.referenceFiles) {
-                reference.fastaURL = URL.createObjectURL(sessionData.referenceFiles.fasta);
-                if (sessionData.referenceFiles.index) reference.indexURL = URL.createObjectURL(sessionData.referenceFiles.index);
-                if (sessionData.referenceFiles.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: sessionData.referenceFiles.annotationFormat || 'gtf', url: URL.createObjectURL(sessionData.referenceFiles.annotation), displayMode: 'COLLAPSED', height: 100 };
-            } else if (genome && !isFileProtocol) {
+                reference.fastaURL = mkObjectURL(sessionData.referenceFiles.fasta);
+                if (sessionData.referenceFiles.index) reference.indexURL = mkObjectURL(sessionData.referenceFiles.index);
+                if (sessionData.referenceFiles.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: sessionData.referenceFiles.annotationFormat || 'gtf', url: mkObjectURL(sessionData.referenceFiles.annotation), displayMode: 'COLLAPSED', height: 100 };
+            } else if (genome) {
                 reference.fastaURL = genome.fasta;
                 if (genome.index) reference.indexURL = genome.index;
                 if (genome.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: genome.annotationFormat || 'gtf', url: genome.annotation, displayMode: 'COLLAPSED', height: 100 };
-            } else if (genome && isFileProtocol) {
-                const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-                reference.fastaURL = base + genome.fasta;
-                if (genome.index) reference.indexURL = base + genome.index;
-                if (genome.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: genome.annotationFormat || 'gtf', url: base + genome.annotation, displayMode: 'COLLAPSED', height: 100 };
             } else throw { code: 'NEEDS_FILE_PICKER', genomeId: id };
             return { reference, annotationTrack };
         }
@@ -653,11 +658,17 @@
         function showReferenceFilePrompt(genomeId) {
             const statusDiv = document.getElementById('uploadStatus');
             const id = getCustomGenomeId(genomeId);
-            const inManifest = !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[id]);
             const picked = { fasta: null, index: null, annotation: null, annotationFormat: null };
             const wrapper = document.createElement('div'); wrapper.className = 'status-message status-info';
-            wrapper.innerHTML = `<strong>Reference files needed</strong><br>The session uses the custom genome <em>${id}</em>. ` +
-                (inManifest && window.location.protocol === 'file:' ? 'When opening via file://, please select the reference files.' : 'Please supply the reference files.');
+            const headerEl = document.createElement('div');
+            headerEl.innerHTML = '<strong>Reference files needed</strong>';
+            const descEl = document.createElement('div');
+            descEl.style.marginTop = '4px';
+            const genomeNameSpan = document.createElement('em'); genomeNameSpan.textContent = id || 'custom';
+            descEl.appendChild(document.createTextNode('This session uses a custom reference genome ('));
+            descEl.appendChild(genomeNameSpan);
+            descEl.appendChild(document.createTextNode('). Please provide the reference files below, or drop them onto the zone above.'));
+            wrapper.appendChild(headerEl); wrapper.appendChild(descEl);
             const dz = document.createElement('div'); dz.className = 'ref-prompt-drop'; dz.textContent = 'Drop FASTA / .fai / GTF or GFF here, or use the pickers below';
             wrapper.appendChild(dz);
             const rows = {};
@@ -751,10 +762,16 @@
         document.getElementById('filesInput').addEventListener('change', e => processFiles(Array.from(e.target.files)));
 
         async function traverseFileTree(item, files) {
-            if (item.isFile) { const file = await new Promise(r => item.file(r)); files.push(file); }
-            else if (item.isDirectory) {
-                const reader = item.createReader(); const entries = await new Promise(r => reader.readEntries(r));
-                for (const entry of entries) await traverseFileTree(entry, files);
+            if (item.isFile) {
+                const file = await new Promise(r => item.file(r));
+                files.push(file);
+            } else if (item.isDirectory) {
+                const reader = item.createReader();
+                let batch;
+                do {
+                    batch = await new Promise(r => reader.readEntries(r));
+                    for (const entry of batch) await traverseFileTree(entry, files);
+                } while (batch.length > 0);
             }
         }
 
@@ -784,9 +801,9 @@
 
                 fileListDiv.innerHTML = '<div style="font-weight: 600; margin-bottom: 8px;">Files loaded:</div>';
                 if (configFile) fileListDiv.innerHTML += '<div class="file-item">config.json</div>';
-                bigWigFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`);
-                bedFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${f.name}</div>`);
-                refFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">📎 ${f.name}</div>`);
+                bigWigFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
+                bedFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
+                refFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">📎 ${escHtml(f.name)}</div>`);
                 fileListDiv.classList.remove('hidden');
 
                 sessionData.bigWigFiles = {};
@@ -810,7 +827,8 @@
                 if (needsReferenceFilePrompt(sessionData.genome)) { showReferenceFilePrompt(sessionData.genome); return; }
 
                 statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded! Launching browser...</div>';
-                setTimeout(launchBrowser, 1000);
+                await new Promise(r => requestAnimationFrame(r));
+                await launchBrowser();
             } catch (error) {
                 console.error('Error processing files:', error);
                 statusDiv.innerHTML = `<div class="status-message status-error">❌ Error: ${error.message}</div>`;
@@ -864,7 +882,7 @@
                 sessionData.tracks.push(trackEntry);
                 existingFileNames.add(file.name);
 
-                const igvTrackCfg = { name: finalName, type: trackEntry.type, format: trackEntry.format, url: URL.createObjectURL(file), color: trackEntry.color, height: 50 };
+                const igvTrackCfg = { name: finalName, type: trackEntry.type, format: trackEntry.format, url: mkObjectURL(file), color: trackEntry.color, height: 50 };
                 if (isBed) igvTrackCfg.displayMode = 'COLLAPSED'; else { igvTrackCfg.autoscale = true; igvTrackCfg.min = 0; }
 
                 try {
@@ -904,12 +922,12 @@
 
                 if (isCustomGenome(genome)) {
                     const genomeId = getCustomGenomeId(genome);
-                    const inManifest = !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[genomeId]);
                     const fastaFile = document.getElementById('refFastaInput').files[0] || null;
                     const faiFile   = document.getElementById('refFaiInput').files[0] || null;
                     const gtfFile   = document.getElementById('refGtfInput').files[0] || null;
+                    const inManifest = !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[genomeId]);
                     if (fastaFile) {
-                        const fmt = gtfFile ? (/\.gff/i.test(gtfFile.name) ? 'gff' : 'gtf') : null;
+                        const fmt = gtfFile ? (/\.gff/i.test(gtfFile.name) ? 'gff3' : 'gtf') : null;
                         sessionData.referenceFiles = { fasta: fastaFile, index: faiFile, annotation: gtfFile, annotationFormat: fmt };
                     } else if (!inManifest) {
                         statusDiv.innerHTML = '<div class="status-message status-error">❌ Please select a FASTA reference file for the custom genome</div>'; return;
@@ -922,7 +940,8 @@
                 sessionData.tracks = createDefaultTracks(trackFiles);
 
                 statusDiv.innerHTML = '<div class="status-message status-success">✅ Session created! Launching browser...</div>';
-                setTimeout(launchBrowser, 500);
+                await new Promise(r => requestAnimationFrame(r));
+                await launchBrowser();
             } catch (error) {
                 statusDiv.innerHTML = `<div class="status-message status-error">❌ Error: ${error.message}</div>`;
             }
@@ -953,7 +972,7 @@
                 const track = sessionData.tracks[i]; const file = sessionData.bigWigFiles[track.file];
                 if (file) {
                     const isBed = track.format === 'bed';
-                    const igvTrack = { name: track.name, type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', url: URL.createObjectURL(file), color: track.color, height: 50 };
+                    const igvTrack = { name: track.name, type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', url: mkObjectURL(file), color: track.color, height: 50 };
                     if (isBed) igvTrack.displayMode = 'COLLAPSED'; else { igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0; }
                     igvOptions.tracks.push(igvTrack);
                     sessionData.trackViewIndices.push(i);
@@ -970,12 +989,7 @@
                 igvEl.addEventListener('wheel', function() { setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0); }, { passive: true });
                 renderTrackControls(); renderGroupList(); updateGroupCountDisplay();
             } catch (error) {
-                const genomeId = getCustomGenomeId(sessionData.genome);
-                const isManifestOnFile = isCustomGenome(sessionData.genome) && window.location.protocol === 'file:' && !!(typeof CUSTOM_GENOMES === 'object' && CUSTOM_GENOMES[genomeId]) && !sessionData.referenceFiles;
-                if (isManifestOnFile) {
-                    igvBrowser = null; document.getElementById('igvContainer').innerHTML = ''; document.getElementById('browserView').classList.remove('active');
-                    document.getElementById('setupView').style.display = 'block'; showReferenceFilePrompt(sessionData.genome);
-                } else alert('Error loading browser: ' + (error && (error.message || error.toString()) || 'unknown error'));
+                alert('Error loading browser: ' + (error && (error.message || error.toString()) || 'unknown error'));
             }
         }
 
@@ -1144,18 +1158,29 @@
         function renderGroupList() {
             const groupList = document.getElementById('groupList'); if (!groupList) return;
             groupList.innerHTML = '';
+            if (sessionData.autoscaleGroups.length === 0) {
+                groupList.innerHTML = '<p style="font-size: 11px; color: #999; font-style: italic;">No autoscale groups defined.</p>';
+                return;
+            }
             sessionData.autoscaleGroups.forEach((group) => {
                 const trackCount = sessionData.tracks.filter(t => t.autoscaleGroup === group).length;
                 const groupDiv = document.createElement('div');
                 groupDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; margin-bottom: 6px;';
-                groupDiv.innerHTML = `
-                    <input type="text" value="${group}" onchange="renameGroup('${group}', this.value)" style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
-                    <span style="font-size: 11px; color: #666; min-width: 50px;">${trackCount} track${trackCount !== 1 ? 's' : ''}</span>
-                    <button onclick="removeGroup('${group}')" class="secondary" style="padding: 4px 8px; font-size: 10px; color: #c00;" title="Remove group">✕</button>
-                `;
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text'; nameInput.value = group;
+                nameInput.style.cssText = 'flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;';
+                nameInput.addEventListener('change', () => renameGroup(group, nameInput.value));
+                const countSpan = document.createElement('span');
+                countSpan.style.cssText = 'font-size: 11px; color: #666; min-width: 50px;';
+                countSpan.textContent = `${trackCount} track${trackCount !== 1 ? 's' : ''}`;
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = '✕'; removeBtn.className = 'secondary';
+                removeBtn.style.cssText = 'padding: 4px 8px; font-size: 10px; color: #c00;';
+                removeBtn.title = 'Remove group';
+                removeBtn.addEventListener('click', () => removeGroup(group));
+                groupDiv.appendChild(nameInput); groupDiv.appendChild(countSpan); groupDiv.appendChild(removeBtn);
                 groupList.appendChild(groupDiv);
             });
-            if (sessionData.autoscaleGroups.length === 0) groupList.innerHTML = '<p style="font-size: 11px; color: #999; font-style: italic;">No autoscale groups defined.</p>';
         }
 
         function updateGroupCountDisplay() { const display = document.getElementById('groupCountDisplay'); if (display) display.textContent = sessionData.autoscaleGroups.length; }
@@ -1168,7 +1193,7 @@
             const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = 'config.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-            if (isCustomGenome(sessionData.genome)) alert('✅ Config saved!\n\nTo share with others (two options):\n\nOption A — Include reference files (works everywhere):\nPut config.json, track files, AND reference files (FASTA, FAI, GTF/GFF) in one folder and share it.\n\nOption B — Manifest only (no reference files needed):\nShare only config.json and track files. The recipient must:\n1. Have this genome in their references/ directory\n2. Have run ./references/update_manifest.sh\n3. Serve via HTTP server (e.g. python -m http.server)');
+            if (isCustomGenome(sessionData.genome)) alert('✅ Config saved!\n\nTo share with collaborators:\nPut config.json, your BigWig/BED track files, AND your reference files (FASTA, .fai index, GTF/GFF annotation) all in one folder and share it.\n\nWhen your collaborator drops the folder into the app the reference files will be detected automatically. If they prefer, they can also load the reference files separately using the file picker shown when the session opens.');
             else alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and all BigWig files in one folder\n2. Share the folder\n3. They can drag & drop it to load everything!');
         }
 
@@ -1184,6 +1209,7 @@
 
         function backToSetup() {
             if (confirm('Are you sure? This will close the current browser session.')) {
+                revokeAllObjectURLs();
                 if (igvBrowser) { igvBrowser.removeAllTracks(); igvBrowser = null; }
                 sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: ['Group 1'], referenceFiles: null };
                 selectedTracks.clear(); lastClickedIndex = null;
@@ -1305,6 +1331,91 @@
             if (/^#[0-9a-fA-F]{6}$/.test(clean)) { mlState.tracks[i].color = clean; const sw = document.getElementById('mlTcSwatch_' + i); if (sw) sw.style.background = clean; const dots = document.querySelectorAll('#mlClusterList .ml-cluster-color-btn'); if (dots[i]) dots[i].style.background = clean; mlRender(); }
         }
         function mlTcHexCommit(i, el) { let val = el.value.trim(); if (!val.startsWith('#')) val = '#' + val; if (/^#[0-9a-fA-F]{6}$/.test(val)) { el.value = val.toLowerCase(); mlSetTrackColor(i, val); } else { el.value = mlState.tracks[i].color; } }
+
+        // ── Colour utilities ─────────────────────────────────────────────────
+        function hslToHex(h, s, l) {
+            s /= 100; l /= 100;
+            const a = s * Math.min(l, 1 - l);
+            const f = n => { const k = (n + h / 30) % 12; const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * color).toString(16).padStart(2, '0'); };
+            return '#' + f(0) + f(8) + f(4);
+        }
+        function hexToHsl(hex) {
+            let r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+            const max = Math.max(r,g,b), min = Math.min(r,g,b); let h, s, l = (max+min)/2;
+            if (max === min) { h = s = 0; } else {
+                const d = max - min; s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+                h = max === r ? ((g-b)/d + (g<b?6:0))/6 : max === g ? ((b-r)/d+2)/6 : ((r-g)/d+4)/6;
+                h = Math.round(h * 360); s = Math.round(s * 100); l = Math.round(l * 100);
+            }
+            return { h, s, l };
+        }
+
+        // ── Figure Style panel ───────────────────────────────────────────────
+        function mlToggleStylePanel() {
+            const panel = document.getElementById('mlStylePanel');
+            if (panel) panel.classList.toggle('open');
+        }
+
+        // ── HSL colour picker ────────────────────────────────────────────────
+        let _mlCpickTrackIdx = null;
+        function mlColorPickerOpen(trackIdx, anchorEl) {
+            _mlCpickTrackIdx = trackIdx;
+            const picker = document.getElementById('mlColorPicker');
+            const color = mlState.tracks[trackIdx].color;
+            const hsl = hexToHsl(color);
+            document.getElementById('mlCpickHue').value = hsl.h;
+            document.getElementById('mlCpickSat').value = hsl.s;
+            document.getElementById('mlCpickLight').value = hsl.l;
+            document.getElementById('mlCpickHex').value = color;
+            mlCpickUpdate();
+            const rect = anchorEl.getBoundingClientRect();
+            picker.style.left = Math.min(rect.left, window.innerWidth - 230) + 'px';
+            picker.style.top  = (rect.bottom + 6) + 'px';
+            picker.classList.add('open');
+        }
+        function mlColorPickerClose() {
+            const picker = document.getElementById('mlColorPicker');
+            if (picker) picker.classList.remove('open');
+            _mlCpickTrackIdx = null;
+        }
+        function mlCpickUpdate() {
+            const h = +document.getElementById('mlCpickHue').value;
+            const s = +document.getElementById('mlCpickSat').value;
+            const l = +document.getElementById('mlCpickLight').value;
+            const hex = hslToHex(h, s, l);
+            document.getElementById('mlCpickPreview').style.background = hex;
+            document.getElementById('mlCpickHex').value = hex;
+        }
+        function mlCpickFromHex(val) {
+            const clean = val.startsWith('#') ? val : '#' + val;
+            if (!/^#[0-9a-fA-F]{6}$/.test(clean)) return;
+            const hsl = hexToHsl(clean);
+            document.getElementById('mlCpickHue').value = hsl.h;
+            document.getElementById('mlCpickSat').value = hsl.s;
+            document.getElementById('mlCpickLight').value = hsl.l;
+            document.getElementById('mlCpickPreview').style.background = clean;
+        }
+        function mlColorPickerApply() {
+            if (_mlCpickTrackIdx === null) return;
+            const hex = document.getElementById('mlCpickHex').value;
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) { mlSetTrackColor(_mlCpickTrackIdx, hex); }
+            mlColorPickerClose();
+        }
+
+        // ── Auto-colour / reset ──────────────────────────────────────────────
+        function mlAutoColorByTag() {
+            const allTags = [...new Set(mlState.tracks.flatMap(t => t.tags || []))];
+            if (!allTags.length) { alert('No tags defined — add tags to tracks in the sidebar first.'); return; }
+            const palette = ['#4a90e2','#e25c5c','#50b86c','#e2924a','#9b59b6','#1abc9c','#e74c8c','#f39c12','#3498db','#2ecc71'];
+            const tagColor = {};
+            allTags.forEach((tag, i) => { tagColor[tag] = palette[i % palette.length]; });
+            mlState.tracks.forEach(t => { const tag = (t.tags || [])[0]; if (tag) t.color = tagColor[tag]; });
+            mlRenderSidebar(); mlRender(); mlRefreshStylePanelTrackColors();
+        }
+        function mlResetColors() {
+            mlState.tracks.forEach((t, i) => { t.color = ML_DEFAULT_COLORS[i % ML_DEFAULT_COLORS.length]; });
+            mlRenderSidebar(); mlRender(); mlRefreshStylePanelTrackColors();
+        }
 
         const ML_HS_HUES = [0, 18, 32, 45, 60, 80, 120, 150, 170, 200, 220, 240, 260, 280, 300, 330];
         let mlHsSelectedHue = 200;
@@ -1797,7 +1908,8 @@
             }
 
             svg += `</svg>`;
-            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = 'multilocus_view.svg'; a.click();
+            const _svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+            const a = document.createElement('a'); a.href = _svgUrl; a.download = 'multilocus_view.svg'; a.click(); URL.revokeObjectURL(_svgUrl);
         }
 
         window.addEventListener('resize', function() {
