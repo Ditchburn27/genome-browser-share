@@ -162,6 +162,8 @@
         .ml-track-row.no-border .ml-track-cell { border-right: none; }
         .ml-track-canvas { display: block; width: 100%; }
         .ml-ymax { font-family: monospace; font-size: 9px; color: #c0c8d8; position: absolute; top: 3px; right: 4px; pointer-events: none; }
+        .ml-ymax-input { color: #555; outline: none; background: white; }
+        .ml-ymax-input:focus { border-color: #4a90e2 !important; }
         .ml-gene-row { display: flex; background: #fafbfd; border-bottom: 1px solid #dde2ea; padding-top: 4px; padding-bottom: 6px; }
         .ml-gene-inner { flex: 1; display: grid; }
         .ml-gene-cell { padding: 0 0 2px 0; border-right: 1px solid #edf0f5; overflow: visible; }
@@ -365,13 +367,17 @@
             <span style="font-size: 12px; color: #666;">Genome: <strong id="genomeDisplay">-</strong></span>
             <span style="font-size: 12px; color: #666; margin-left: 15px;">
                 Track Height:
-                <select id="trackHeightSelect" onchange="updateAllTrackHeights(this.value)" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
+                <select id="trackHeightSelect" onchange="onTrackHeightSelectChange(this.value)" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
                     <option value="40">Compact (40px)</option>
                     <option value="50" selected>Standard (50px)</option>
                     <option value="75">Medium (75px)</option>
                     <option value="100">Tall (100px)</option>
                     <option value="150">Extra Tall (150px)</option>
+                    <option value="custom">Custom…</option>
                 </select>
+                <input type="number" id="customTrackHeightInput" min="20" max="400" placeholder="px"
+                    style="display:none;width:55px;padding:3px 6px;font-size:12px;border:1px solid #d0d0d0;border-radius:3px;margin-left:4px;"
+                    onchange="updateAllTrackHeights(+this.value)">
             </span>
             <span style="font-size: 12px; color: #666; margin-left: 15px;">
                 Autoscale Groups: <strong id="groupCountDisplay">1</strong>
@@ -428,6 +434,7 @@
                             <option value="group">By autoscale group</option>
                             <option value="group-row">By group (all loci)</option>
                             <option value="global">Global max</option>
+                            <option value="browser">From IGV browser</option>
                         </select>
                         <div class="ml-toolbar-sep"></div>
                         <label><input type="checkbox" id="mlShowGene" checked onchange="mlState.showGene=this.checked; mlRender();"> Gene model</label>
@@ -814,7 +821,7 @@
                     const config = JSON.parse(await configFile.text());
                     sessionData.genome = config.genome || 'hg38'; sessionData.locus = config.region || null;
                     sessionData.autoscaleGroups = config.autoscaleGroups || [];
-                    if (config.tracks) sessionData.tracks = config.tracks.map(t => ({ ...t, autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : null }));
+                    if (config.tracks) sessionData.tracks = config.tracks.map(t => ({ ...t, autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : null, height: t.height || null }));
                     else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded!</div>';
                 } else {
@@ -877,12 +884,12 @@
                 const usedNames = new Set(sessionData.tracks.map(t => t.name));
                 while (usedNames.has(finalName)) finalName = `${displayName} (${suffix++})`;
 
-                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', autoscaleGroup: null };
+                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', autoscaleGroup: null, height: null };
                 sessionData.bigWigFiles[file.name] = file;
                 sessionData.tracks.push(trackEntry);
                 existingFileNames.add(file.name);
 
-                const igvTrackCfg = { name: finalName, type: trackEntry.type, format: trackEntry.format, url: mkObjectURL(file), color: trackEntry.color, height: 50 };
+                const igvTrackCfg = { name: finalName, type: trackEntry.type, format: trackEntry.format, url: mkObjectURL(file), color: trackEntry.color, height: trackEntry.height || 50 };
                 if (isBed) igvTrackCfg.displayMode = 'COLLAPSED'; else { igvTrackCfg.autoscale = true; igvTrackCfg.min = 0; }
 
                 try {
@@ -972,7 +979,7 @@
                 const track = sessionData.tracks[i]; const file = sessionData.bigWigFiles[track.file];
                 if (file) {
                     const isBed = track.format === 'bed';
-                    const igvTrack = { name: track.name, type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', url: mkObjectURL(file), color: track.color, height: 50 };
+                    const igvTrack = { name: track.name, type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', url: mkObjectURL(file), color: track.color, height: track.height || 50 };
                     if (isBed) igvTrack.displayMode = 'COLLAPSED'; else { igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0; }
                     igvOptions.tracks.push(igvTrack);
                     sessionData.trackViewIndices.push(i);
@@ -1005,6 +1012,8 @@
                     <input type="checkbox" ${selectedTracks.has(index) ? 'checked' : ''} onclick="handleTrackSelect(event, ${index})" title="Select track">
                     <input type="color" id="colorPicker${index}" value="${track.color}" onchange="updateTrackColor(${index}, this.value)" title="Change color" style="width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px;">
                     <input type="text" id="trackName${index}" value="${track.name}" onchange="updateTrackName(${index}, this.value)" onclick="event.stopPropagation()" style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    <input type="number" min="20" max="400" value="${track.height || 50}" title="Track height (px)" onclick="event.stopPropagation()" onchange="updateSingleTrackHeight(${index}, +this.value)" style="width:55px;border:1px solid #d0d0d0;padding:2px 4px;border-radius:3px;font-size:11px;text-align:center;">
+                    <span style="font-size:10px;color:#999;">px</span>
                     ${groupBadge}
                 `;
                 trackDiv.querySelector('.drag-handle').addEventListener('mousedown', () => { trackDiv.draggable = true; document.addEventListener('mouseup', () => { trackDiv.draggable = false; }, { once: true }); });
@@ -1065,11 +1074,37 @@
             }
         }
 
+        function onTrackHeightSelectChange(value) {
+            const customInput = document.getElementById('customTrackHeightInput');
+            if (value === 'custom') {
+                customInput.style.display = 'inline-block';
+                customInput.focus();
+            } else {
+                customInput.style.display = 'none';
+                updateAllTrackHeights(+value);
+            }
+        }
+
         function updateAllTrackHeights(height) {
             const heightValue = parseInt(height);
+            if (!heightValue || heightValue < 20) return;
+            sessionData.tracks.forEach(t => { t.height = heightValue; });
             if (igvBrowser && igvBrowser.trackViews) {
                 for (let i = 1; i < igvBrowser.trackViews.length; i++) {
                     const tv = igvBrowser.trackViews[i]; if (tv && tv.track) tv.setTrackHeight(heightValue);
+                }
+            }
+            renderTrackControls();
+        }
+
+        function updateSingleTrackHeight(index, height) {
+            const heightValue = Math.max(20, Math.min(400, parseInt(height) || 50));
+            sessionData.tracks[index].height = heightValue;
+            if (igvBrowser && igvBrowser.trackViews) {
+                const trackName = sessionData.tracks[index].name;
+                for (let i = 0; i < igvBrowser.trackViews.length; i++) {
+                    const tv = igvBrowser.trackViews[i];
+                    if (tv.track && tv.track.name === trackName) { tv.setTrackHeight(heightValue); break; }
                 }
             }
         }
@@ -1188,7 +1223,7 @@
         function saveSessionConfig() {
             const config = {
                 genome: sessionData.genome, region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus, autoscaleGroups: sessionData.autoscaleGroups,
-                tracks: sessionData.tracks.map(t => ({ name: t.name, file: t.file, color: t.color, type: t.type || 'wig', format: t.format || 'bigwig', autoscaleGroup: t.autoscaleGroup || null }))
+                tracks: sessionData.tracks.map(t => ({ name: t.name, file: t.file, color: t.color, type: t.type || 'wig', format: t.format || 'bigwig', autoscaleGroup: t.autoscaleGroup || null, height: t.height || null }))
             };
             const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1271,6 +1306,7 @@
             showTrackBg: true, fontFamily: 'Arial, sans-serif', fontSizeGeneName: 13, fontSizeCoord: 10, fontSizeTrackLabel: 11, fontSizeYmax: 9,
             geneModelColor: '#8a7030', geneExonColor: '#c4a84a', geneLabelColor: '#8a7030', labelColor: 'black',
             exportColW: 260, exportScale: 1, geneModelMode: 'squished', showSpanBar: false, ymaxMode: 'max',
+            browserYmax: {}, manualYmax: {},
         };
 
         const ML_DEFAULT_COLORS = ['#4a90e2','#e25c5c','#50b86c','#e2924a','#9b59b6','#1abc9c','#e74c8c','#3498db','#f39c12','#2ecc71'];
@@ -1279,7 +1315,7 @@
             const existing = {}; mlState.tracks.forEach(t => existing[t.name] = t);
             mlState.tracks = sessionData.tracks.map(t => {
                 if (existing[t.name]) { existing[t.name].color = t.color; existing[t.name].file = sessionData.bigWigFiles[t.file] || null; existing[t.name].autoscaleGroup = t.autoscaleGroup || null; if (!existing[t.name].tags) existing[t.name].tags = []; return existing[t.name]; }
-                return { name: t.name, color: t.color, visible: true, file: sessionData.bigWigFiles[t.file] || null, autoscaleGroup: t.autoscaleGroup || null, tags: [], cache: {} };
+                return { name: t.name, color: t.color, visible: true, file: sessionData.bigWigFiles[t.file] || null, autoscaleGroup: t.autoscaleGroup || null, tags: [], cache: {}, manualYmax: null };
             });
             mlRenderSidebar(); mlRenderTagFilters();
         }
@@ -1294,10 +1330,16 @@
                                 <input class="ml-add-tag-input" placeholder="add tag…" type="text" maxlength="24"><button class="ml-add-tag-btn" type="submit">+</button>
                             </form></div></div>
                     <div class="ml-cluster-color-btn" title="Change colour" style="background:${t.color}" onclick="mlColorPickerOpen(${i}, this)"></div>
+                    <input type="number" class="ml-ymax-input" min="0" step="any" placeholder="y-max" title="Manual y-max override (leave blank for auto)" value="${t.manualYmax != null ? t.manualYmax : ''}" style="width:52px;font-size:10px;border:1px solid #d8dce4;border-radius:3px;padding:1px 4px;font-family:monospace;" onchange="mlSetManualYmax(${i}, this.value ? +this.value : null)">
                     <span class="ml-cluster-eye" onclick="mlToggleTrack(${i})" title="Toggle visibility">${t.visible ? '👁' : '○'}</span>
                 </div>`;
             }).join('');
             mlRefreshStylePanelTrackColors();
+        }
+
+        function mlSetManualYmax(i, value) {
+            mlState.tracks[i].manualYmax = value;
+            mlRender();
         }
 
         function mlSetTrackColor(i, color) {
@@ -1692,7 +1734,8 @@
             const gene = document.getElementById('newLocusGene').value.trim(), coord = document.getElementById('newLocusCoord').value.trim();
             if (!coord) { alert('Please enter coordinates (e.g. chr7:31,376,000-31,418,000).\nGene name alone is not sufficient — coordinates are required to fetch data.'); return; }
             const parsed = parseLocusString(coord); if (!parsed) { alert('Could not parse coordinates. Use format: chr7:31,376,000-31,418,000 or NC_063440.1:5,291,000-5,330,000'); return; }
-            mlState.locusCounter++; mlState.loci.push({ id: mlState.locusCounter, gene: gene || coord, chr: parsed.chr, start: parsed.start, end: parsed.end, raw: coord, hiddenGenes: [] });
+            mlState.locusCounter++; mlState.loci.push({ id: mlState.locusCounter, gene: gene || coord, chr: parsed.chr, start: parsed.start, end: parsed.end, raw: coord, hiddenGenes: [], browserYmax: mlState._pendingBrowserYmax ? Object.assign({}, mlState._pendingBrowserYmax) : null });
+            mlState._pendingBrowserYmax = null;
             document.getElementById('newLocusGene').value = ''; document.getElementById('newLocusCoord').value = '';
             document.getElementById('locusManagerList').innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Loading new gene list...</div>'; await renderLocusManagerList();
         }
@@ -1702,6 +1745,14 @@
             const rf = igvBrowser.referenceFrameList && igvBrowser.referenceFrameList[0]; if (!rf || !rf.chr) { alert('Could not read current IGV view.'); return; }
             const start = Math.floor(rf.start), vpWidth = igvBrowser.trackViews && igvBrowser.trackViews[0] ? igvBrowser.trackViews[0].viewports[0].$viewport.width() : document.getElementById('igvContainer').clientWidth;
             document.getElementById('newLocusCoord').value = rf.chr + ':' + fmtCoord(start) + '-' + fmtCoord(Math.floor(rf.start + (rf.bpPerPixel * vpWidth)));
+            mlState._pendingBrowserYmax = {};
+            if (igvBrowser && igvBrowser.trackViews) {
+                igvBrowser.trackViews.forEach(tv => {
+                    if (tv.track && tv.track.name && tv.track.dataRange) {
+                        mlState._pendingBrowserYmax[tv.track.name] = tv.track.dataRange.max;
+                    }
+                });
+            }
         }
 
         async function mlRender() {
@@ -1736,6 +1787,8 @@
             else if (mode === 'group') loci.forEach((_, li) => { const gm = {}; visibleTracks.forEach((t, ti) => { const g = t.autoscaleGroup; if (g) gm[g] = Math.max(gm[g]||0, ymaxGrid[ti][li]); }); visibleTracks.forEach((t, ti) => { if (t.autoscaleGroup && gm[t.autoscaleGroup]) ymaxGrid[ti][li] = gm[t.autoscaleGroup]; }); });
             else if (mode === 'group-row') { const gm = {}; visibleTracks.forEach((t, ti) => { const g = t.autoscaleGroup; if (!g) return; loci.forEach((_, li) => { gm[g] = Math.max(gm[g]||0, ymaxGrid[ti][li]); }); }); visibleTracks.forEach((t, ti) => { if (t.autoscaleGroup && gm[t.autoscaleGroup]) loci.forEach((_, li) => { ymaxGrid[ti][li] = gm[t.autoscaleGroup]; }); }); }
             else if (mode === 'global') { let gMax = 1; visibleTracks.forEach((_, ti) => loci.forEach((_, li) => { gMax = Math.max(gMax, ymaxGrid[ti][li]); })); visibleTracks.forEach((_, ti) => loci.forEach((_, li) => { ymaxGrid[ti][li] = gMax; })); }
+            else if (mode === 'browser') { visibleTracks.forEach((t, ti) => { loci.forEach((locus, li) => { const bmax = locus.browserYmax && locus.browserYmax[t.name]; if (bmax && bmax > 0) ymaxGrid[ti][li] = bmax; }); }); }
+            visibleTracks.forEach((t, ti) => { if (t.manualYmax != null && t.manualYmax > 0) loci.forEach((_, li) => { ymaxGrid[ti][li] = t.manualYmax; }); });
 
             container.querySelectorAll('canvas[data-ti]').forEach(canvas => { const ti = +canvas.dataset.ti, li = +canvas.dataset.li; mlPaintTrack(canvas, ti, li, visibleTracks, loci, binGrid[ti][li], ymaxGrid[ti][li]); });
 
