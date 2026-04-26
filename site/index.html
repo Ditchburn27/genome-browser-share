@@ -78,6 +78,8 @@
         .drag-handle:hover { color: #555; }
         .track-item.dragging { opacity: 0.4; }
         .track-item.drag-over { border-top: 2px solid #4a90e2; margin-top: -1px; }
+        .ml-locus-item.dragging { opacity: 0.4; }
+        .ml-locus-item.drag-over { border-top: 2px solid #4a90e2; margin-top: -1px; }
 
         /* ── Tab navigation ──────────────────────────────────────────── */
         .tab-nav { display: flex; align-items: center; gap: 0; background: #1c2333; padding: 0 24px; border-bottom: 1px solid #0e1420; }
@@ -112,6 +114,19 @@
         .ml-tag-pill.active { background: #4a90e2; color: white; }
         .ml-tag-pill.removable:hover::after { content: " ×"; font-size: 8px; }
         .ml-tag-filter-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px; align-items: center; }
+        .ml-tag-sel-bar { display:none; align-items:center; gap:6px; padding:4px 8px; background:#eef2ff; border:1px solid #c5cef5; border-radius:4px; margin-bottom:6px; flex-wrap:wrap; }
+        .ml-tag-sel-bar.visible { display:flex; }
+        .ml-tag-sel-bar select { font-size:11px; padding:2px 5px; border:1px solid #c5cef5; border-radius:3px; }
+        .ml-tag-sel-bar button { font-size:11px; padding:2px 8px; }
+        .ml-tag-cat-panel { border:1px solid #e4e7ec; border-radius:4px; margin-bottom:6px; overflow:hidden; }
+        .ml-tag-cat-header { display:flex; align-items:center; gap:6px; padding:4px 8px; background:#f5f7fc; border-bottom:1px solid #e4e7ec; }
+        .ml-tag-cat-header-name { font-size:11px; font-weight:700; color:#3a4252; flex:1; min-width:0; }
+        .ml-tag-cat-body { padding:4px 8px 6px; }
+        .ml-tag-val-row { display:flex; align-items:center; gap:5px; padding:2px 0; }
+        .ml-tag-val-row input[type=color] { width:20px; height:16px; border:none; padding:0; cursor:pointer; }
+        .ml-tag-val-row span { font-size:10px; color:#3a4252; flex:1; }
+        .ml-tag-val-del { font-size:9px; color:#c0392b; cursor:pointer; padding:0 3px; background:none; border:none; }
+        .ml-tag-val-del:hover { text-decoration:underline; }
         .ml-toolbar { background: #fff; border-bottom: 1px solid #e4e7ec; padding: 7px 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 20; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
         .ml-toolbar label { font-size: 11px; font-weight: 500; color: #5a6478; cursor: pointer; }
         .ml-toolbar select, .ml-toolbar input[type=range] { font-size: 11px; padding: 3px 6px; border: 1px solid #d8dce4; border-radius: 4px; width: auto; background: #f8f9fc; }
@@ -128,7 +143,7 @@
         .ml-locus-cell:last-child { border-right: none; }
         .ml-locus-gene { font-size: 13px; font-weight: 700; font-style: italic; color: #1a1d23; }
         .ml-locus-coord { font-family: monospace; font-size: 10px; color: #8a94a8; margin-top: 2px; }
-        .ml-label-col { flex-shrink: 0; background: transparent; display: flex; align-items: center; overflow: hidden; }
+        .ml-label-col { flex-shrink: 0; background: transparent; display: flex; align-items: center; overflow: hidden; gap: 2px; }
         .ml-track-label { font-size: 11px; font-weight: 500; color: #3a4252; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px 0 0; width: 100%; text-align: right; }
         .ml-track-label-pill { width: 4px; flex-shrink: 0; border-radius: 2px; align-self: stretch; margin: 4px 4px 4px 5px; }
         .ml-span-bar { display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 3px; color: #8a94a8; font-size: 9px; }
@@ -237,6 +252,16 @@
         .ml-hs-hex { font-size:10px; font-family:monospace; width:64px; border:1px solid #d8dce4; border-radius:3px; padding:2px 5px; outline:none; color:#1a1d23; flex-shrink:0; }
         .ml-hs-hex:focus { border-color:#3b7dd8; }
         .ml-hs-hex-prev { width:16px; height:16px; border-radius:3px; border:1px solid rgba(0,0,0,0.15); flex-shrink:0; }
+
+        /* ── Legend panel ──────────────────────────────────────────────────── */
+        .ml-browser-flex { display: flex; flex-direction: row; align-items: flex-start; }
+        .ml-browser-flex .ml-browser-content { flex: 1; min-width: 0; overflow-x: auto; }
+        .ml-legend-panel { flex-shrink: 0; padding: 8px 10px 8px 12px; background: #fff; min-width: 90px; max-width: 220px; overflow-y: auto; align-self: stretch; }
+        .ml-legend-group-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9aa3b8; margin: 8px 0 4px; }
+        .ml-legend-group-title:first-child { margin-top: 0; }
+        .ml-legend-item { display: flex; align-items: center; gap: 5px; padding: 2px 0; font-size: 11px; color: #3a4252; overflow: hidden; }
+        .ml-legend-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ml-legend-swatch { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -445,22 +470,35 @@
                         <button class="ml-btn ml-btn-primary" onclick="openLocusManager()">&#43; Manage Loci</button>
                         <button class="ml-btn" id="mlStyleBtn" onclick="mlToggleStylePanel()">&#9881; Figure Style</button>
                         <button class="ml-btn" onclick="mlExportSVG()">Export SVG</button>
+                        <input type="file" id="mlConfigFileInput" accept=".json" style="display:none" onchange="mlLoadConfigFromFile(this)">
+                        <button class="ml-btn" onclick="mlSaveConfig()" title="Save multi-locus view config as .json">&#128190; Save ML Config</button>
+                        <button class="ml-btn" onclick="document.getElementById('mlConfigFileInput').click()" title="Load a multi-locus view config from any .json file">&#128194; Load ML Config</button>
                     </div>
                     <div id="mlBrowser" class="ml-browser"></div>
                 </div>
 
                 <aside class="ml-sidebar">
-                    <div class="ml-sidebar-section" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
-                        <div style="flex:2;min-width:260px;">
-                            <div class="ml-sidebar-title">Tracks</div>
-                            <span style="font-size:9px;color:#aaa;margin-left:6px;">click 👁 to toggle visibility &middot; add tags to group tracks &middot; click tags below to filter</span>
-                            <div id="mlClusterList" style="display:flex;flex-wrap:wrap;gap:0 12px;margin-top:4px;"></div>
-                        </div>
-                        <div style="flex:1;min-width:160px;">
-                            <div class="ml-sidebar-title">Filter by tag</div>
-                            <div id="mlTagFilterRow" class="ml-tag-filter-row">
-                                <span style="font-size:10px;color:#bbb;">No tags yet</span>
+                    <div class="ml-sidebar-section">
+                        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+                            <div style="flex:2;min-width:260px;">
+                                <div class="ml-sidebar-title">Tracks</div>
+                                <span style="font-size:9px;color:#aaa;margin-left:6px;">checkbox to select &middot; 👁 toggle visibility &middot; select tracks then assign tags below</span>
+                                <div id="mlTagSelBar" class="ml-tag-sel-bar" style="margin-top:4px;"></div>
+                                <div id="mlClusterList" style="display:flex;flex-wrap:wrap;gap:0 12px;margin-top:4px;"></div>
                             </div>
+                            <div style="flex:1;min-width:160px;">
+                                <div class="ml-sidebar-title">Filter by tag</div>
+                                <div id="mlTagFilterRow" class="ml-tag-filter-row">
+                                    <span style="font-size:10px;color:#bbb;">No tags yet</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                <div class="ml-sidebar-title" style="margin:0;">Tag Categories</div>
+                                <button class="ml-btn" onclick="mlTagAddCategory()" style="font-size:10px;padding:2px 8px;">+ New Category</button>
+                            </div>
+                            <div id="mlTagCategoryDefs" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
                         </div>
                     </div>
                 </aside>
@@ -494,6 +532,47 @@
                 </div>
             </div>
             <div class="ml-style-section">
+                <div class="ml-style-section-title">Label Style</div>
+                <div class="ml-style-row">
+                    <label class="ml-style-label">Style</label>
+                    <select id="mlStLabelStyle" onchange="mlState.labelStyle=this.value; mlToggleLegendOptions(); mlRender();">
+                        <option value="pill">Pill (default)</option>
+                        <option value="square">Colour square</option>
+                    </select>
+                </div>
+                <div id="mlLegendOptions" style="display:none;">
+                    <div class="ml-style-row">
+                        <label class="ml-style-label">Square colour from</label>
+                        <select id="mlStSquareSource" onchange="mlState.squareSource=this.value; mlToggleLegendOptions(); mlRender();">
+                            <option value="color">Track colour</option>
+                            <option value="tag">Tag categories</option>
+                        </select>
+                    </div>
+                    <div class="ml-style-row">
+                        <label class="ml-style-label" for="mlStShowLegend">Show legend</label>
+                        <input type="checkbox" id="mlStShowLegend" onchange="mlState.showLegend=this.checked; mlRender();">
+                    </div>
+                    <div class="ml-style-row">
+                        <label class="ml-style-label" style="color:#777;font-style:italic;">Category label text (enable per category below):</label>
+                    </div>
+                    <div class="ml-style-row">
+                        <label class="ml-style-label">Box label colour</label>
+                        <input type="color" value="#ffffff" id="mlStCatLabelColor" oninput="mlState.catLabelColor=this.value; mlRender();">
+                    </div>
+                    <div class="ml-style-row">
+                        <label class="ml-style-label">Box label font size</label>
+                        <input type="range" min="0" max="24" value="0" id="mlStCatLabelSize" oninput="mlState.fontSizeCatLabel=+this.value; document.getElementById('mlStCatLabelSizeVal').textContent=this.value||'auto'; mlRender();"><span class="ml-style-val" id="mlStCatLabelSizeVal">auto</span>
+                    </div>
+                    <div id="mlCatLabelToggles" style="margin-top:4px;"></div>
+                </div>
+            </div>
+            <div class="ml-style-section" id="mlLegendColorSection" style="display:none;">
+                <div class="ml-style-section-title">Legend Colors</div>
+                <div style="font-size:10px;color:#aaa;margin-bottom:6px;line-height:1.5;">Set a display colour for each tag value. These colours appear in the legend and as coloured squares next to tracks.</div>
+                <div id="mlLegendColorEditor"></div>
+                <button class="ml-btn" onclick="mlAutoColorByTag()" style="font-size:10px;padding:3px 8px;margin-top:6px;">Auto-assign colours</button>
+            </div>
+            <div class="ml-style-section">
                 <div class="ml-style-section-title">Typography</div>
                 <div class="ml-style-row">
                     <label class="ml-style-label">Font family</label>
@@ -511,6 +590,8 @@
                 <div class="ml-style-row"><label class="ml-style-label">Coord label size</label><input type="range" min="7" max="16" value="10" id="mlStCoordSize" oninput="mlState.fontSizeCoord=+this.value; document.getElementById('mlStCoordSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStCoordSizeVal">10</span></div>
                 <div class="ml-style-row"><label class="ml-style-label">Track label size</label><input type="range" min="7" max="16" value="11" id="mlStTrackLabelSize" oninput="mlState.fontSizeTrackLabel=+this.value; document.getElementById('mlStTrackLabelSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStTrackLabelSizeVal">11</span></div>
                 <div class="ml-style-row"><label class="ml-style-label">Y-max label size</label><input type="range" min="6" max="14" value="9" id="mlStYmaxSize" oninput="mlState.fontSizeYmax=+this.value; document.getElementById('mlStYmaxSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStYmaxSizeVal">9</span></div>
+                <div class="ml-style-row"><label class="ml-style-label">Legend font size</label><input type="range" min="7" max="18" value="11" id="mlStLegendSize" oninput="mlState.fontSizeLegend=+this.value; document.getElementById('mlStLegendSizeVal').textContent=this.value; mlRender();"><span class="ml-style-val" id="mlStLegendSizeVal">11</span></div>
+                <div class="ml-style-row"><label class="ml-style-label">Legend font colour</label><input type="color" value="#3a4252" id="mlStLegendFontColor" oninput="mlState.legendFontColor=this.value; mlRender();"></div>
             </div>
             <div class="ml-style-section">
                 <div class="ml-style-section-title">Gene Model</div>
@@ -604,10 +685,11 @@
 
     <script>
         let igvBrowser = null;
-        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], referenceFiles: null, pendingRefFiles: null };
+        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
         let dragSourceIndex = null;
+        let locusDragSourceIndex = null;
 
         const _objectURLs = new Set();
         function mkObjectURL(blob) { const u = URL.createObjectURL(blob); _objectURLs.add(u); return u; }
@@ -789,9 +871,10 @@
             fileListDiv.classList.add('hidden');
             
             try {
-                let configFile = null; const bigWigFiles = [], bedFiles = [], refFiles = [];
+                let configFile = null, mlConfigFile = null; const bigWigFiles = [], bedFiles = [], refFiles = [];
                 for (const file of files) {
                     if (file.name === 'config.json') configFile = file;
+                    else if (file.name === 'ml_config.json') mlConfigFile = file;
                     else if (file.name.match(/\.(bw|bigwig|bigWig)$/i)) bigWigFiles.push(file);
                     else if (file.name.match(/\.bed$/i)) bedFiles.push(file);
                     else if (file.name.match(/\.(fa|fasta|fna|fai|gzi)(\.gz)?$/i) || file.name.match(/\.(gtf|gff|gff3)(\.gz)?$/i)) refFiles.push(file);
@@ -808,6 +891,7 @@
 
                 fileListDiv.innerHTML = '<div style="font-weight: 600; margin-bottom: 8px;">Files loaded:</div>';
                 if (configFile) fileListDiv.innerHTML += '<div class="file-item">config.json</div>';
+                if (mlConfigFile) fileListDiv.innerHTML += '<div class="file-item">ml_config.json</div>';
                 bigWigFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
                 bedFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
                 refFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">📎 ${escHtml(f.name)}</div>`);
@@ -816,6 +900,10 @@
                 sessionData.bigWigFiles = {};
                 for (const file of bigWigFiles) sessionData.bigWigFiles[file.name] = file;
                 for (const file of bedFiles) sessionData.bigWigFiles[file.name] = file;
+
+                if (mlConfigFile) {
+                    try { sessionData.mlConfig = JSON.parse(await mlConfigFile.text()); sessionData.mlConfigApplied = false; } catch(e) { console.warn('ml_config.json parse error', e); }
+                } else { sessionData.mlConfig = null; sessionData.mlConfigApplied = false; }
 
                 if (configFile) {
                     const config = JSON.parse(await configFile.text());
@@ -1029,6 +1117,12 @@
         function handleTrackDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const target = getDropTarget(e); if (!target || parseInt(target.dataset.index) === dragSourceIndex) { clearDragIndicators(); return; } clearDragIndicators(); target.classList.add('drag-over'); }
         function handleTrackDrop(e) { e.preventDefault(); clearDragIndicators(); const target = getDropTarget(e); if (!target) return; const toIndex = parseInt(target.dataset.index); if (dragSourceIndex === null || dragSourceIndex === toIndex) return; reorderTrack(dragSourceIndex, toIndex); }
         function handleTrackDragEnd(e) { e.currentTarget.classList.remove('dragging'); e.currentTarget.draggable = false; dragSourceIndex = null; clearDragIndicators(); }
+
+        function handleLocusDragStart(e) { locusDragSourceIndex = parseInt(e.currentTarget.dataset.locusIndex); e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(locusDragSourceIndex)); }
+        function clearLocusDragIndicators() { document.querySelectorAll('.ml-locus-item.drag-over').forEach(el => el.classList.remove('drag-over')); }
+        function handleLocusDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const target = e.target.closest('.ml-locus-item'); if (!target || parseInt(target.dataset.locusIndex) === locusDragSourceIndex) { clearLocusDragIndicators(); return; } clearLocusDragIndicators(); target.classList.add('drag-over'); }
+        function handleLocusDrop(e) { e.preventDefault(); clearLocusDragIndicators(); const target = e.target.closest('.ml-locus-item'); if (!target) return; const toIdx = parseInt(target.dataset.locusIndex); if (locusDragSourceIndex === null || locusDragSourceIndex === toIdx) return; const [moved] = mlState.loci.splice(locusDragSourceIndex, 1); mlState.loci.splice(toIdx, 0, moved); renderLocusManagerList(); }
+        function handleLocusDragEnd(e) { e.currentTarget.classList.remove('dragging'); e.currentTarget.draggable = false; locusDragSourceIndex = null; clearLocusDragIndicators(); }
 
         function reorderTrack(fromIndex, toIndex) {
             const [movedTrack] = sessionData.tracks.splice(fromIndex, 1); sessionData.tracks.splice(toIndex, 0, movedTrack);
@@ -1296,7 +1390,11 @@
             document.getElementById('tabMultilocus').classList.toggle('active', name === 'multilocus');
             document.getElementById('tabBtnIgv').classList.toggle('active', name === 'igv');
             document.getElementById('tabBtnMl').classList.toggle('active', name === 'multilocus');
-            if (name === 'multilocus') { mlSyncTracksFromSession(); mlRenderSidebar(); mlSeedCurrentLocus(); setTimeout(() => mlRender(), 80); }
+            if (name === 'multilocus') {
+                mlSyncTracksFromSession(); mlRenderSidebar(); mlSeedCurrentLocus();
+                if (sessionData.mlConfig && !sessionData.mlConfigApplied) { mlApplyConfig(sessionData.mlConfig); sessionData.mlConfigApplied = true; }
+                else setTimeout(() => mlRender(), 80);
+            }
         }
 
         const mlState = {
@@ -1307,34 +1405,273 @@
             geneModelColor: '#8a7030', geneExonColor: '#c4a84a', geneLabelColor: '#8a7030', labelColor: 'black',
             exportColW: 260, exportScale: 1, geneModelMode: 'squished', showSpanBar: false, ymaxMode: 'max',
             browserYmax: {}, manualYmax: {},
+            labelStyle: 'pill', squareSource: 'color', showLegend: false,
+            tagCategoryColors: {}, tagCategoryOrder: [],
+            showCatLabels: true, catLabelColor: '#ffffff', fontSizeCatLabel: 0,
+            catLabelsEnabled: {},
+            legendFontColor: '#3a4252',
+            fontSizeLegend: 11,
+            mlTagSelectedTracks: new Set(), tagCategoryDefs: {},
         };
 
         const ML_DEFAULT_COLORS = ['#4a90e2','#e25c5c','#50b86c','#e2924a','#9b59b6','#1abc9c','#e74c8c','#3498db','#f39c12','#2ecc71'];
 
+        function mlGetTagValueColor(cat, val) { return ((mlState.tagCategoryColors[cat] || {})[val]) || '#888888'; }
+        function mlGetTagColor(tag) { return mlGetTagValueColor('Tag', tag); }
+        function mlGetOrderedCategories(tracks) {
+            const allCats = [...new Set([
+                ...Object.keys(mlState.tagCategoryDefs || {}),
+                ...(tracks || mlState.tracks).flatMap(t => Object.keys(t.tagCategories || {}))
+            ])];
+            const order = mlState.tagCategoryOrder || [];
+            const ordered = order.filter(c => allCats.includes(c));
+            allCats.forEach(c => { if (!ordered.includes(c)) ordered.push(c); });
+            return ordered;
+        }
+        function mlEnsureCategoryOrder(cat) {
+            if (!mlState.tagCategoryOrder) mlState.tagCategoryOrder = [];
+            if (!mlState.tagCategoryOrder.includes(cat)) mlState.tagCategoryOrder.push(cat);
+        }
+        function mlMoveCategoryUp(cat) {
+            const order = mlGetOrderedCategories(); const i = order.indexOf(cat);
+            if (i <= 0) return; [order[i - 1], order[i]] = [order[i], order[i - 1]];
+            mlState.tagCategoryOrder = order; mlRenderLegendColorEditor(); mlRenderCatLabelToggles(); mlRender();
+        }
+        function mlMoveCategoryDown(cat) {
+            const order = mlGetOrderedCategories(); const i = order.indexOf(cat);
+            if (i < 0 || i >= order.length - 1) return; [order[i], order[i + 1]] = [order[i + 1], order[i]];
+            mlState.tagCategoryOrder = order; mlRenderLegendColorEditor(); mlRenderCatLabelToggles(); mlRender();
+        }
+        function mlToggleLegendOptions() {
+            const el = document.getElementById('mlLegendOptions'); if (el) el.style.display = mlState.labelStyle === 'square' ? 'block' : 'none';
+            const catSrc = mlState.squareSource === 'tag', legendSec = document.getElementById('mlLegendColorSection');
+            if (legendSec) legendSec.style.display = (mlState.labelStyle === 'square' && catSrc) ? 'block' : 'none';
+            if (mlState.labelStyle === 'square' && catSrc) mlRenderLegendColorEditor();
+        }
+
+        function mlSaveConfig() {
+            const config = {
+                version: 1,
+                loci: mlState.loci.map(l => ({ id: l.id, gene: l.gene, chr: l.chr, start: l.start, end: l.end, raw: l.raw, hiddenGenes: l.hiddenGenes || [] })),
+                trackSettings: mlState.tracks.map(t => ({ name: t.name, color: t.color, visible: t.visible, tags: t.tags || [], tagCategories: t.tagCategories || {}, manualYmax: t.manualYmax != null ? t.manualYmax : null })),
+                settings: { trackHeight: mlState.trackHeight, yscale: mlState.yscale, showGene: mlState.showGene, showYmax: mlState.showYmax, showLabels: mlState.showLabels, showBorder: mlState.showBorder, showTrackBg: mlState.showTrackBg, fontFamily: mlState.fontFamily, fontSizeGeneName: mlState.fontSizeGeneName, fontSizeLocusGene: mlState.fontSizeLocusGene, fontSizeCoord: mlState.fontSizeCoord, fontSizeTrackLabel: mlState.fontSizeTrackLabel, fontSizeYmax: mlState.fontSizeYmax, geneModelColor: mlState.geneModelColor, geneExonColor: mlState.geneExonColor, geneLabelColor: mlState.geneLabelColor, labelColor: mlState.labelColor, exportColW: mlState.exportColW, exportScale: mlState.exportScale, geneModelMode: mlState.geneModelMode, showSpanBar: mlState.showSpanBar, ymaxMode: mlState.ymaxMode, labelStyle: mlState.labelStyle, squareSource: mlState.squareSource, showLegend: mlState.showLegend, tagCategoryColors: mlState.tagCategoryColors, tagCategoryOrder: mlState.tagCategoryOrder, showCatLabels: mlState.showCatLabels, catLabelColor: mlState.catLabelColor, fontSizeCatLabel: mlState.fontSizeCatLabel, catLabelsEnabled: mlState.catLabelsEnabled, legendFontColor: mlState.legendFontColor, fontSizeLegend: mlState.fontSizeLegend, tagCategoryDefs: mlState.tagCategoryDefs }
+            };
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = 'ml_config.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            alert('✅ ML config saved!\n\nYou can rename this file to anything (e.g. experiment1.json). Load it back at any time using the Load ML Config button. Include it alongside config.json and your BigWig files when sharing — it will restore automatically when opened as ml_config.json.');
+        }
+
+        async function mlLoadConfigFromFile(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            input.value = '';
+            try {
+                const text = await file.text();
+                const cfg = JSON.parse(text);
+                mlApplyConfig(cfg);
+                mlRender();
+            } catch(e) {
+                alert('Failed to load ML config: ' + e.message);
+            }
+        }
+
+        function mlApplyConfig(config) {
+            if (!config) return;
+            if (Array.isArray(config.loci)) mlState.loci = config.loci.map(l => ({ ...l, hiddenGenes: l.hiddenGenes || [] }));
+            if (config.settings) {
+                const s = config.settings;
+                const setIfDef = (key, id, setter) => { if (s[key] !== undefined) { mlState[key] = s[key]; const el = document.getElementById(id); if (el) setter(el, s[key]); } };
+                setIfDef('trackHeight', 'mlTrackHeight', (el, v) => { el.value = v; const lbl = document.getElementById('mlThVal'); if (lbl) lbl.textContent = v + 'px'; });
+                setIfDef('yscale', 'mlYscale', (el, v) => el.value = v);
+                setIfDef('showGene', 'mlShowGene', (el, v) => { el.checked = v; const el2 = document.getElementById('mlStShowGene2'); if (el2) el2.checked = v; });
+                setIfDef('showYmax', 'mlShowYmax', (el, v) => { el.checked = v; const el2 = document.getElementById('mlStShowYmax2'); if (el2) el2.checked = v; });
+                setIfDef('showLabels', 'mlShowLabels', (el, v) => { el.checked = v; const el2 = document.getElementById('mlStShowLabels2'); if (el2) el2.checked = v; });
+                setIfDef('showBorder', 'mlShowBorder', (el, v) => { el.checked = v; const el2 = document.getElementById('mlStShowBorder2'); if (el2) el2.checked = v; });
+                setIfDef('showTrackBg', 'mlStShowBg', (el, v) => el.checked = v);
+                setIfDef('fontFamily', 'mlStFontFamily', (el, v) => el.value = v);
+                setIfDef('fontSizeGeneName', 'mlStGeneNameSize', (el, v) => { el.value = v; const lbl = document.getElementById('mlStGeneNameSizeVal'); if (lbl) lbl.textContent = v; });
+                setIfDef('fontSizeLocusGene', 'mlStLocusGeneSize', (el, v) => { el.value = v; const lbl = document.getElementById('mlStLocusGeneSizeVal'); if (lbl) lbl.textContent = v; });
+                setIfDef('fontSizeCoord', 'mlStCoordSize', (el, v) => { el.value = v; const lbl = document.getElementById('mlStCoordSizeVal'); if (lbl) lbl.textContent = v; });
+                setIfDef('fontSizeTrackLabel', 'mlStTrackLabelSize', (el, v) => { el.value = v; const lbl = document.getElementById('mlStTrackLabelSizeVal'); if (lbl) lbl.textContent = v; });
+                setIfDef('fontSizeYmax', 'mlStYmaxSize', (el, v) => { el.value = v; const lbl = document.getElementById('mlStYmaxSizeVal'); if (lbl) lbl.textContent = v; });
+                setIfDef('geneModelColor', 'mlStGeneBackbone', (el, v) => el.value = v);
+                setIfDef('geneExonColor', 'mlStGeneExon', (el, v) => el.value = v);
+                setIfDef('geneLabelColor', 'mlStGeneLabelColor', (el, v) => el.value = v);
+                setIfDef('labelColor', 'mlStLabelColor', (el, v) => el.value = v);
+                setIfDef('exportColW', 'mlStColW', (el, v) => { el.value = v; const lbl = document.getElementById('mlStColWVal'); if (lbl) lbl.textContent = v + 'px'; });
+                setIfDef('exportScale', 'mlStScale', (el, v) => el.value = v);
+                setIfDef('geneModelMode', 'mlStGeneMode', (el, v) => el.value = v);
+                setIfDef('showSpanBar', 'mlStShowSpanBar', (el, v) => el.checked = v);
+                if (s.labelStyle !== undefined) { mlState.labelStyle = s.labelStyle; const el = document.getElementById('mlStLabelStyle'); if (el) el.value = s.labelStyle; mlToggleLegendOptions(); }
+                if (s.squareSource !== undefined) { mlState.squareSource = s.squareSource; const el = document.getElementById('mlStSquareSource'); if (el) el.value = s.squareSource; }
+                if (s.showLegend !== undefined) { mlState.showLegend = s.showLegend; const el = document.getElementById('mlStShowLegend'); if (el) el.checked = s.showLegend; }
+                if (s.tagCategoryColors !== undefined) mlState.tagCategoryColors = s.tagCategoryColors;
+                if (s.tagCategoryOrder !== undefined) mlState.tagCategoryOrder = s.tagCategoryOrder;
+                if (s.tagCategoryDefs !== undefined) mlState.tagCategoryDefs = s.tagCategoryDefs;
+                mlState.showCatLabels = true; // always true; per-category catLabelsEnabled is now the sole control
+                if (s.catLabelColor !== undefined) { mlState.catLabelColor = s.catLabelColor; const el = document.getElementById('mlStCatLabelColor'); if (el) el.value = s.catLabelColor; }
+                if (s.fontSizeCatLabel !== undefined) { mlState.fontSizeCatLabel = s.fontSizeCatLabel; const el = document.getElementById('mlStCatLabelSize'); if (el) { el.value = s.fontSizeCatLabel; const lbl = document.getElementById('mlStCatLabelSizeVal'); if (lbl) lbl.textContent = s.fontSizeCatLabel || 'auto'; } }
+                if (s.catLabelsEnabled !== undefined) mlState.catLabelsEnabled = s.catLabelsEnabled;
+                if (s.legendFontColor !== undefined) { mlState.legendFontColor = s.legendFontColor; const el = document.getElementById('mlStLegendFontColor'); if (el) el.value = s.legendFontColor; }
+                setIfDef('fontSizeLegend', 'mlStLegendSize', (el, v) => { el.value = v; const lbl = document.getElementById('mlStLegendSizeVal'); if (lbl) lbl.textContent = v; });
+            }
+            if (Array.isArray(config.trackSettings)) {
+                const byName = {}; config.trackSettings.forEach(ts => byName[ts.name] = ts);
+                mlState.tracks.forEach(t => {
+                    const ts = byName[t.name]; if (!ts) return;
+                    t.color = ts.color; t.visible = ts.visible !== undefined ? ts.visible : true;
+                    t.tags = ts.tags || [];
+                    t.tagCategories = ts.tagCategories || {};
+                    // migrate old flat tags to tagCategories if no categories yet
+                    if (t.tags.length && !Object.keys(t.tagCategories).length) { t.tags.forEach((v, i) => { t.tagCategories[i === 0 ? 'Tag' : 'Tag' + (i + 1)] = v; }); }
+                    t.manualYmax = ts.manualYmax != null ? ts.manualYmax : null;
+                });
+            }
+            mlRenderSidebar(); mlRenderTagCategoryDefs(); setTimeout(() => mlRender(), 50);
+        }
+
         function mlSyncTracksFromSession() {
             const existing = {}; mlState.tracks.forEach(t => existing[t.name] = t);
             mlState.tracks = sessionData.tracks.map(t => {
-                if (existing[t.name]) { existing[t.name].color = t.color; existing[t.name].file = sessionData.bigWigFiles[t.file] || null; existing[t.name].autoscaleGroup = t.autoscaleGroup || null; if (!existing[t.name].tags) existing[t.name].tags = []; return existing[t.name]; }
-                return { name: t.name, color: t.color, visible: true, file: sessionData.bigWigFiles[t.file] || null, autoscaleGroup: t.autoscaleGroup || null, tags: [], cache: {}, manualYmax: null };
+                if (existing[t.name]) { existing[t.name].color = t.color; existing[t.name].file = sessionData.bigWigFiles[t.file] || null; existing[t.name].autoscaleGroup = t.autoscaleGroup || null; if (!existing[t.name].tags) existing[t.name].tags = []; if (!existing[t.name].tagCategories) existing[t.name].tagCategories = {}; return existing[t.name]; }
+                return { name: t.name, color: t.color, visible: true, file: sessionData.bigWigFiles[t.file] || null, autoscaleGroup: t.autoscaleGroup || null, tags: [], tagCategories: {}, cache: {}, manualYmax: null };
             });
-            mlRenderSidebar(); mlRenderTagFilters();
+            mlRenderSidebar(); mlRenderTagFilters(); mlRenderTagCategoryDefs();
         }
 
         function mlRenderSidebar() {
             const list = document.getElementById('mlClusterList'); if (!list) return;
             list.innerHTML = mlState.tracks.map((t, i) => {
-                const tagPills = (t.tags || []).map(tag => `<span class="ml-tag-pill removable" title="click to remove" onclick="event.stopPropagation();mlRemoveTag(${i},'${tag.replace(/'/g,"\\'")}');">${tag} &times;</span>`).join('');
-                return `<div class="ml-cluster-row ${t.visible ? '' : 'hidden-track'}" style="min-width:160px;max-width:240px;">
-                    <div class="ml-cluster-meta"><span class="ml-cluster-name">${t.name}</span><div class="ml-cluster-tags">${tagPills}
-                            <form class="ml-add-tag-form" onsubmit="event.preventDefault();var v=this.querySelector('input').value.trim();if(v){mlAddTag(${i},v);this.reset();}">
-                                <input class="ml-add-tag-input" placeholder="add tag…" type="text" maxlength="24"><button class="ml-add-tag-btn" type="submit">+</button>
-                            </form></div></div>
-                    <div class="ml-cluster-color-btn" title="Change colour" style="background:${t.color}" onclick="mlColorPickerOpen(${i}, this)"></div>
-                    <input type="number" class="ml-ymax-input" min="0" step="any" placeholder="y-max" title="Manual y-max override (leave blank for auto)" value="${t.manualYmax != null ? t.manualYmax : ''}" style="width:52px;font-size:10px;border:1px solid #d8dce4;border-radius:3px;padding:1px 4px;font-family:monospace;" onchange="mlSetManualYmax(${i}, this.value ? +this.value : null)">
-                    <span class="ml-cluster-eye" onclick="mlToggleTrack(${i})" title="Toggle visibility">${t.visible ? '👁' : '○'}</span>
-                </div>`;
+                const tagPills = Object.entries(t.tagCategories || {}).map(([cat, val]) => {
+                    const sqColor = mlGetTagValueColor(cat, val);
+                    return `<span class="ml-tag-pill" style="cursor:default;" title="${cat}: ${val}"><span style="display:inline-block;width:7px;height:7px;border-radius:1px;background:${sqColor};margin-right:2px;vertical-align:middle;"></span>${val}</span>`;
+                }).join('');
+                const isSelected = mlState.mlTagSelectedTracks.has(i);
+                return `<div class="ml-cluster-row ${t.visible ? '' : 'hidden-track'}" style="min-width:160px;max-width:260px;">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="mlTagToggleTrackSelect(${i})" style="flex-shrink:0;cursor:pointer;" title="Select for batch tag assignment">
+            <span class="ml-cluster-vis" onclick="mlToggleTrack(${i})" title="Toggle visibility">${t.visible ? '👁' : '🙈'}</span>
+            <div class="ml-cluster-meta"><span class="ml-cluster-name">${t.name}</span><div class="ml-cluster-tags">${tagPills || '<span style="font-size:9px;color:#ccc;">—</span>'}</div></div>
+            <div class="ml-cluster-color-btn" title="Change colour" style="background:${t.color}" onclick="mlColorPickerOpen(${i}, this)"></div>
+        </div>`;
             }).join('');
+            mlRenderTagSelectionBar();
+            mlRenderTagCategoryDefs();
             mlRefreshStylePanelTrackColors();
+            mlRenderCatLabelToggles();
+        }
+
+        function mlRenderTagSelectionBar() {
+            const bar = document.getElementById('mlTagSelBar'); if (!bar) return;
+            const n = mlState.mlTagSelectedTracks.size;
+            if (n === 0) { bar.classList.remove('visible'); return; }
+            bar.classList.add('visible');
+            const cats = mlGetOrderedCategories();
+            const catOpts = cats.length
+                ? cats.map(c => `<option value="${c}">${c}</option>`).join('')
+                : '<option value="">— define categories below —</option>';
+            const selCat = bar.dataset.selCat && cats.includes(bar.dataset.selCat) ? bar.dataset.selCat : (cats[0] || '');
+            const vals = selCat ? (mlState.tagCategoryDefs[selCat] || [...new Set(mlState.tracks.flatMap(t => { const v = (t.tagCategories||{})[selCat]; return v ? [v] : []; }))]) : [];
+            const valOpts = vals.length ? vals.map(v => `<option value="${v}">${v}</option>`).join('') : '<option value="">— add values below —</option>';
+            bar.innerHTML = `
+        <span style="font-size:11px;font-weight:600;">${n} selected</span>
+        <select id="mlTagBarCat" style="font-size:11px;padding:2px 5px;border:1px solid #c5cef5;border-radius:3px;" onchange="mlTagBarCatChanged(this.value)">${catOpts}</select>
+        <select id="mlTagBarVal" style="font-size:11px;padding:2px 5px;border:1px solid #c5cef5;border-radius:3px;">${valOpts}</select>
+        <button class="ml-btn ml-btn-primary" onclick="mlTagAssignToSelected()" style="font-size:11px;padding:2px 8px;">Assign</button>
+        <button class="ml-btn" onclick="mlTagClearCatFromSelected()" style="font-size:11px;padding:2px 8px;" title="Remove this category tag from selected tracks">Clear tag</button>
+        <button class="ml-btn" onclick="mlTagClearSelection()" style="font-size:11px;padding:2px 8px;">Deselect all</button>`;
+            if (selCat) { const catEl = document.getElementById('mlTagBarCat'); if (catEl) catEl.value = selCat; }
+        }
+
+        function mlTagToggleTrackSelect(i) {
+            if (mlState.mlTagSelectedTracks.has(i)) mlState.mlTagSelectedTracks.delete(i);
+            else mlState.mlTagSelectedTracks.add(i);
+            mlRenderSidebar();
+        }
+        function mlTagClearSelection() { mlState.mlTagSelectedTracks.clear(); mlRenderSidebar(); }
+        function mlTagBarCatChanged(cat) {
+            const bar = document.getElementById('mlTagSelBar'); if (bar) bar.dataset.selCat = cat; mlRenderTagSelectionBar();
+        }
+        function mlTagAssignToSelected() {
+            const catEl = document.getElementById('mlTagBarCat'), valEl = document.getElementById('mlTagBarVal');
+            const cat = catEl && catEl.value, val = valEl && valEl.value;
+            if (!cat || !val) return;
+            mlState.mlTagSelectedTracks.forEach(i => { mlAddTagCategory(i, cat, val); });
+            mlRender(); mlRenderTagSelectionBar();
+        }
+        function mlTagClearCatFromSelected() {
+            const catEl = document.getElementById('mlTagBarCat'); const cat = catEl && catEl.value; if (!cat) return;
+            mlState.mlTagSelectedTracks.forEach(i => { mlRemoveTagCategory(i, cat); });
+            mlRenderTagSelectionBar();
+        }
+
+        function mlRenderTagCategoryDefs() {
+            const el = document.getElementById('mlTagCategoryDefs'); if (!el) return;
+            const cats = mlGetOrderedCategories();
+            if (!cats.length) { el.innerHTML = '<span style="font-size:10px;color:#bbb;">No categories yet — click "+ New Category" to create one</span>'; return; }
+            el.innerHTML = cats.map((cat, ci) => {
+                const catEsc = cat.replace(/'/g,"\\'");
+                const vals = mlState.tagCategoryDefs[cat] || [...new Set(mlState.tracks.flatMap(t => { const v = (t.tagCategories||{})[cat]; return v ? [v] : []; }))];
+                const valsHtml = vals.map(val => {
+                    const color = mlGetTagValueColor(cat, val);
+                    const valEsc = val.replace(/'/g,"\\'");
+                    const assignedCount = mlState.tracks.filter(t => (t.tagCategories||{})[cat] === val).length;
+                    return `<div class="ml-tag-val-row"><input type="color" value="${color}" oninput="mlSetTagValueColor('${catEsc}','${valEsc}',this.value)" title="Color for ${val}"><span title="${assignedCount} track(s) assigned">${val} <span style="color:#aaa;font-size:9px;">(${assignedCount})</span></span><button class="ml-tag-val-del" onclick="mlTagRemoveValue('${catEsc}','${valEsc}')" title="Remove value">&#x2715;</button></div>`;
+                }).join('');
+                const addValForm = `<form class="ml-add-tag-form" style="margin-top:4px;" onsubmit="event.preventDefault();var inp=this.querySelector('input');var v=inp.value.trim();if(v){mlTagAddValue('${catEsc}',v);inp.value='';}"><input class="ml-add-tag-input" placeholder="add value…" type="text" maxlength="48" style="width:90px;"><button class="ml-add-tag-btn" type="submit">+</button></form>`;
+                return `<div class="ml-tag-cat-panel" style="min-width:120px;max-width:200px;flex:1;">
+            <div class="ml-tag-cat-header">
+                <span class="ml-tag-cat-header-name" contenteditable="true" onblur="mlTagRenameCategory('${catEsc}',this.textContent.trim())" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${cat}</span>
+                <button class="ml-tag-val-del" onclick="mlTagDeleteCategory('${catEsc}')" title="Delete category" style="font-size:10px;">&#x2715;</button>
+            </div>
+            <div class="ml-tag-cat-body">${valsHtml}${addValForm}</div>
+        </div>`;
+            }).join('');
+        }
+
+        function mlTagAddCategory() {
+            let name = prompt('Category name (e.g. "Modality"):'); if (!name) return;
+            name = name.trim(); if (!name) return;
+            mlEnsureCategoryOrder(name);
+            if (!mlState.tagCategoryDefs) mlState.tagCategoryDefs = {};
+            if (!mlState.tagCategoryDefs[name]) mlState.tagCategoryDefs[name] = [];
+            mlRenderTagCategoryDefs(); mlRenderLegendColorEditor(); mlRenderTagSelectionBar();
+        }
+        function mlTagAddValue(cat, val) {
+            val = val.trim(); if (!val) return;
+            if (!mlState.tagCategoryDefs) mlState.tagCategoryDefs = {};
+            if (!mlState.tagCategoryDefs[cat]) mlState.tagCategoryDefs[cat] = [];
+            if (!mlState.tagCategoryDefs[cat].includes(val)) mlState.tagCategoryDefs[cat].push(val);
+            mlRenderTagCategoryDefs(); mlRenderLegendColorEditor(); mlRenderTagSelectionBar();
+        }
+        function mlTagRemoveValue(cat, val) {
+            if (mlState.tagCategoryDefs && mlState.tagCategoryDefs[cat]) {
+                mlState.tagCategoryDefs[cat] = mlState.tagCategoryDefs[cat].filter(v => v !== val);
+            }
+            mlRenderTagCategoryDefs();
+        }
+        function mlTagDeleteCategory(cat) {
+            const count = mlState.tracks.filter(t => (t.tagCategories||{})[cat]).length;
+            if (count > 0 && !confirm(`"${cat}" is assigned to ${count} track(s). Delete anyway?`)) return;
+            if (mlState.tagCategoryDefs) delete mlState.tagCategoryDefs[cat];
+            mlState.tagCategoryOrder = (mlState.tagCategoryOrder || []).filter(c => c !== cat);
+            mlState.tracks.forEach((t, i) => { if ((t.tagCategories||{})[cat]) mlRemoveTagCategory(i, cat); });
+            mlRenderTagCategoryDefs(); mlRenderLegendColorEditor(); mlRender();
+        }
+        function mlTagRenameCategory(oldName, newName) {
+            if (!newName || newName === oldName) return;
+            const order = mlState.tagCategoryOrder || [];
+            const idx = order.indexOf(oldName); if (idx > -1) order[idx] = newName;
+            const defs = mlState.tagCategoryDefs || {};
+            if (defs[oldName]) { defs[newName] = defs[oldName]; delete defs[oldName]; }
+            const colors = mlState.tagCategoryColors || {};
+            if (colors[oldName]) { colors[newName] = colors[oldName]; delete colors[oldName]; }
+            mlState.tracks.forEach(t => {
+                if (t.tagCategories && t.tagCategories[oldName] !== undefined) {
+                    t.tagCategories[newName] = t.tagCategories[oldName]; delete t.tagCategories[oldName];
+                    t.tags = Object.values(t.tagCategories);
+                }
+            });
+            mlRenderTagCategoryDefs(); mlRenderLegendColorEditor(); mlRenderSidebar(); mlRender();
         }
 
         function mlSetManualYmax(i, value) {
@@ -1356,7 +1693,7 @@
                 <div class="ml-tc-row">
                     <input type="checkbox" class="ml-tc-cb mlTcCb" data-idx="${i}" onchange="mlTcUpdateSelCount()">
                     <div class="ml-tc-swatch" id="mlTcSwatch_${i}" style="background:${t.color};" title="Open HSL colour picker" onclick="mlColorPickerOpen(${i}, this)"><input type="color" value="${t.color}" oninput="mlSetTrackColor(${i},this.value)"></div>
-                    <span class="ml-tc-name" title="${t.name}">${t.name}</span><span class="ml-tc-tags" title="${(t.tags||[]).join(', ')}">${(t.tags||[]).join(', ')||'—'}</span>
+                    <span class="ml-tc-name" title="${t.name}">${t.name}</span><span class="ml-tc-tags" title="${Object.entries(t.tagCategories||{}).map(([c,v])=>c+': '+v).join(', ')}">${Object.entries(t.tagCategories||{}).map(([c,v])=>c+': '+v).join(', ')||'—'}</span>
                     <input type="text" class="ml-tc-hex" id="mlTcHex_${i}" value="${t.color}" maxlength="7" placeholder="#rrggbb" oninput="mlTcHexInput(${i}, this.value)" onblur="mlTcHexCommit(${i}, this)">
                 </div>`).join('');
             mlTcUpdateSelCount(); mlHsUpdateChips();
@@ -1446,13 +1783,19 @@
 
         // ── Auto-colour / reset ──────────────────────────────────────────────
         function mlAutoColorByTag() {
-            const allTags = [...new Set(mlState.tracks.flatMap(t => t.tags || []))];
-            if (!allTags.length) { alert('No tags defined — add tags to tracks in the sidebar first.'); return; }
-            const palette = ['#4a90e2','#e25c5c','#50b86c','#e2924a','#9b59b6','#1abc9c','#e74c8c','#f39c12','#3498db','#2ecc71'];
-            const tagColor = {};
-            allTags.forEach((tag, i) => { tagColor[tag] = palette[i % palette.length]; });
-            mlState.tracks.forEach(t => { const tag = (t.tags || [])[0]; if (tag) t.color = tagColor[tag]; });
-            mlRenderSidebar(); mlRender(); mlRefreshStylePanelTrackColors();
+            const cats = mlGetOrderedCategories();
+            if (!cats.length) { alert('No tag categories defined — add category: value tags to tracks in the sidebar first.'); return; }
+            const palette = ['#4a90e2','#e25c5c','#50b86c','#e2924a','#9b59b6','#1abc9c','#e74c8c','#f39c12','#3498db','#2ecc71','#16a085','#d35400','#8e44ad','#27ae60','#c0392b','#2980b9'];
+            if (!mlState.tagCategoryColors) mlState.tagCategoryColors = {};
+            cats.forEach(cat => {
+                const vals = [...new Set(mlState.tracks.flatMap(t => { const v = (t.tagCategories||{})[cat]; return v ? [v] : []; }))];
+                if (!mlState.tagCategoryColors[cat]) mlState.tagCategoryColors[cat] = {};
+                vals.forEach((val, i) => { mlState.tagCategoryColors[cat][val] = palette[i % palette.length]; });
+            });
+            // set track color from first category so bars match the legend
+            const firstCat = cats[0];
+            mlState.tracks.forEach(t => { const val = (t.tagCategories||{})[firstCat]; if (val && mlState.tagCategoryColors[firstCat] && mlState.tagCategoryColors[firstCat][val]) t.color = mlState.tagCategoryColors[firstCat][val]; });
+            mlRenderSidebar(); mlRender(); mlRefreshStylePanelTrackColors(); mlRenderLegendColorEditor();
         }
         function mlResetColors() {
             mlState.tracks.forEach((t, i) => { t.color = ML_DEFAULT_COLORS[i % ML_DEFAULT_COLORS.length]; });
@@ -1501,15 +1844,63 @@
         function mlToggleTrack(i) { mlState.tracks[i].visible = !mlState.tracks[i].visible; mlRenderSidebar(); mlRender(); }
         function mlAddTag(i, tag) { tag = tag.trim(); if (!tag) return; if (!mlState.tracks[i].tags) mlState.tracks[i].tags = []; if (!mlState.tracks[i].tags.includes(tag)) { mlState.tracks[i].tags.push(tag); mlRenderSidebar(); mlRenderTagFilters(); } }
         function mlRemoveTag(i, tag) { if (!mlState.tracks[i].tags) return; mlState.tracks[i].tags = mlState.tracks[i].tags.filter(t => t !== tag); const stillExists = mlState.tracks.some(t => (t.tags||[]).includes(tag)); if (!stillExists) mlState.activeTagFilters.delete(tag); mlRenderSidebar(); mlRenderTagFilters(); mlRender(); }
+        function mlAddTagCategory(i, category, value) {
+            category = category.trim(); value = value.trim(); if (!category || !value) return;
+            if (!mlState.tracks[i].tagCategories) mlState.tracks[i].tagCategories = {};
+            mlState.tracks[i].tagCategories[category] = value;
+            mlState.tracks[i].tags = Object.values(mlState.tracks[i].tagCategories);
+            mlEnsureCategoryOrder(category);
+            mlRenderSidebar(); mlRenderTagFilters(); mlRenderLegendColorEditor(); mlRenderTagCategoryDefs(); mlRenderCatLabelToggles();
+        }
+        function mlRemoveTagCategory(i, category) {
+            if (!mlState.tracks[i].tagCategories) return;
+            const removedVal = mlState.tracks[i].tagCategories[category];
+            delete mlState.tracks[i].tagCategories[category];
+            mlState.tracks[i].tags = Object.values(mlState.tracks[i].tagCategories);
+            if (removedVal) { const stillExists = mlState.tracks.some(t => Object.values(t.tagCategories || {}).includes(removedVal)); if (!stillExists) mlState.activeTagFilters.delete(removedVal); }
+            mlRenderSidebar(); mlRenderTagFilters(); mlRenderLegendColorEditor(); mlRenderTagCategoryDefs(); mlRender();
+        }
         function mlRenderTagFilters() {
             const row = document.getElementById('mlTagFilterRow'); if (!row) return;
-            const allTags = [...new Set(mlState.tracks.flatMap(t => t.tags || []))];
-            if (allTags.length === 0) { row.innerHTML = '<span style="font-size:10px;color:#bbb;">No tags yet — add tags to tracks to enable filtering</span>'; return; }
-            const pills = allTags.map(tag => { const active = mlState.activeTagFilters.has(tag); return `<span class="ml-tag-pill ${active ? 'active' : ''}" onclick="mlToggleTagFilter('${tag.replace(/'/g,"\\'")}')">${tag} ${active ? '&#x2713;' : ''}</span>`; }).join('');
+            const allVals = [...new Set(mlState.tracks.flatMap(t => Object.values(t.tagCategories || {})))];
+            if (allVals.length === 0) { row.innerHTML = '<span style="font-size:10px;color:#bbb;">No tags yet — add category: value tags to tracks to enable filtering</span>'; return; }
+            const pills = allVals.map(val => { const active = mlState.activeTagFilters.has(val); return `<span class="ml-tag-pill ${active ? 'active' : ''}" onclick="mlToggleTagFilter('${val.replace(/'/g,"\\'")}')">${val} ${active ? '&#x2713;' : ''}</span>`; }).join('');
             const clearLink = mlState.activeTagFilters.size > 0 ? `<a href="#" onclick="event.preventDefault();mlState.activeTagFilters.clear();mlRenderTagFilters();mlRender();" style="font-size:10px;color:#c0392b;text-decoration:none;margin-left:6px;">clear filter</a>` : `<span style="font-size:10px;color:#aaa;margin-left:4px;">click to filter</span>`;
             row.innerHTML = pills + clearLink;
         }
-        function mlToggleTagFilter(tag) { if (mlState.activeTagFilters.has(tag)) mlState.activeTagFilters.delete(tag); else mlState.activeTagFilters.add(tag); mlRenderTagFilters(); mlRender(); }
+        function mlToggleTagFilter(val) { if (mlState.activeTagFilters.has(val)) mlState.activeTagFilters.delete(val); else mlState.activeTagFilters.add(val); mlRenderTagFilters(); mlRender(); }
+        function mlRenderCatLabelToggles() {
+            const el = document.getElementById('mlCatLabelToggles'); if (!el) return;
+            const cats = mlGetOrderedCategories();
+            if (!cats.length) { el.innerHTML = ''; return; }
+            const init = mlState.catLabelsEnabled || {};
+            el.innerHTML = '<div style="font-size:10px;color:#888;margin-bottom:3px;">Enable text label per category:</div>' + cats.map(cat => {
+                const checked = init[cat] === true;
+                const esc = cat.replace(/'/g, "\\'");
+                return `<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#3a4252;margin-bottom:2px;"><input type="checkbox" ${checked ? 'checked' : ''} onchange="mlState.catLabelsEnabled['${esc}']=this.checked;mlRender();"> ${cat}</label>`;
+            }).join('');
+        }
+        function mlRenderLegendColorEditor() {
+            const el = document.getElementById('mlLegendColorEditor'); if (!el) return;
+            const cats = mlGetOrderedCategories();
+            if (!cats.length) { el.innerHTML = '<span style="font-size:10px;color:#aaa;">No tag categories defined yet. Add category: value tags to tracks in the sidebar.</span>'; return; }
+            el.innerHTML = cats.map((cat, ci) => {
+                const vals = [...new Set(mlState.tracks.flatMap(t => { const v = (t.tagCategories||{})[cat]; return v ? [v] : []; }))];
+                const catEsc = cat.replace(/'/g,"\\'");
+                const upBtn = ci > 0 ? `<button onclick="mlMoveCategoryUp('${catEsc}')" style="font-size:9px;padding:0 3px;border:1px solid #d0d0d0;border-radius:2px;background:white;cursor:pointer;line-height:1.4;" title="Move up">&#x25B2;</button>` : `<span style="width:16px;display:inline-block;"></span>`;
+                const dnBtn = ci < cats.length - 1 ? `<button onclick="mlMoveCategoryDown('${catEsc}')" style="font-size:9px;padding:0 3px;border:1px solid #d0d0d0;border-radius:2px;background:white;cursor:pointer;line-height:1.4;" title="Move down">&#x25BC;</button>` : `<span style="width:16px;display:inline-block;"></span>`;
+                return `<div style="margin-bottom:8px;"><div style="display:flex;align-items:center;gap:3px;margin-bottom:3px;">${upBtn}${dnBtn}<span style="font-size:10px;font-weight:700;color:#5a6478;text-transform:uppercase;letter-spacing:0.05em;">${cat}</span></div>${vals.map(val => {
+                    const color = mlGetTagValueColor(cat, val);
+                    const valEsc = val.replace(/'/g,"\\'");
+                    return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;padding-left:4px;"><input type="color" value="${color}" oninput="mlSetTagValueColor('${catEsc}','${valEsc}',this.value);this.nextElementSibling.value=this.value;" style="width:24px;height:18px;border:none;padding:0;cursor:pointer;border-radius:2px;flex-shrink:0;"><input type="text" value="${color}" placeholder="#rrggbb" oninput="const v=this.value.trim();if(/^#[0-9a-fA-F]{6}$/.test(v)){mlSetTagValueColor('${catEsc}','${valEsc}',v);this.previousElementSibling.value=v;}" style="width:62px;font-size:10px;font-family:monospace;border:1px solid #d8dce4;border-radius:3px;padding:2px 4px;outline:none;color:#1a1d23;flex-shrink:0;"><span style="font-size:10px;color:#3a4252;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px;" title="${val}">${val}</span></div>`;
+                }).join('')}</div>`;
+            }).join('');
+        }
+        function mlSetTagValueColor(cat, val, color) {
+            if (!mlState.tagCategoryColors[cat]) mlState.tagCategoryColors[cat] = {};
+            mlState.tagCategoryColors[cat][val] = color;
+            mlRenderSidebar(); mlRender();
+        }
 
         // ── BigWig reading via File API ──────────────────────────────────────
         async function readBigWigLocus(file, chr, start, end, nBins) {
@@ -1690,31 +2081,45 @@
         function closeLocusManager() { document.getElementById('locusManagerOverlay').classList.remove('open'); }
 
         async function renderLocusManagerList() {
-            const el = document.getElementById('locusManagerList'); let html = '';
+            const el = document.getElementById('locusManagerList');
+            if (mlState.loci.length === 0) { el.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:10px;">No loci added yet.</div>'; return; }
+            el.innerHTML = '';
             for (let i = 0; i < mlState.loci.length; i++) {
                 const l = mlState.loci[i]; let uniqueGenes = [];
                 if (l.chr && l.end > l.start) {
                     try { const feats = await mlFetchGeneFeatures(l); uniqueGenes = [...new Set(feats.map(f => f.name).filter(Boolean))].sort(); } catch(e) {}
                 }
-                let cbHtml = uniqueGenes.length === 0 ? '<span style="font-size:11px;color:#999;">No genes found in this region.</span>' : `<div class="ml-gene-cb-list">` + uniqueGenes.map(g => {
-                    const isHidden = (l.hiddenGenes || []).includes(g);
-                    return `<label class="ml-gene-cb"><input type="checkbox" ${!isHidden ? 'checked' : ''} onchange="mlToggleGeneVisibility(${i}, '${g.replace(/'/g, "\\'")}', this.checked)"> ${g}</label>`;
-                }).join('') + `</div>`;
 
-                html += `
-                <div class="ml-locus-item">
-                    <div class="ml-locus-item-row">
-                        <span class="ml-locus-item-label">Label:</span><input type="text" value="${l.gene}" onchange="mlState.loci[${i}].gene = this.value" style="width:110px; flex:none;" placeholder="Label">
-                        <span class="ml-locus-item-label" style="width:auto;margin-left:6px;">Coords:</span><input type="text" value="${l.raw || ''}" onchange="mlUpdateLocusCoord(${i}, this.value)" placeholder="e.g. chr7:31,376,000-31,418,000">
-                        <button class="ml-remove-btn" onclick="mlRemoveLocus(${i})" title="Remove">&#x2715;</button>
-                    </div>
-                    <div class="ml-locus-item-row" style="align-items:flex-start;">
-                        <span class="ml-locus-item-label" style="width:auto; color:#4a90e2; font-weight:600; margin-top:4px;">Visible Genes:</span><div style="flex:1;">${cbHtml}</div>
-                    </div>
-                </div>`;
+                const item = document.createElement('div');
+                item.className = 'ml-locus-item'; item.dataset.locusIndex = i;
+
+                const row1 = document.createElement('div'); row1.className = 'ml-locus-item-row';
+                const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = '⠿'; handle.title = 'Drag to reorder';
+                handle.addEventListener('mousedown', () => { item.draggable = true; document.addEventListener('mouseup', () => { item.draggable = false; }, { once: true }); });
+                const lblSpan = document.createElement('span'); lblSpan.className = 'ml-locus-item-label'; lblSpan.textContent = 'Label:';
+                const lblInput = document.createElement('input'); lblInput.type = 'text'; lblInput.value = l.gene; lblInput.placeholder = 'Label'; lblInput.style.cssText = 'width:110px;flex:none;border:1px solid #d0d0d0;border-radius:3px;padding:4px 7px;font-size:12px;';
+                lblInput.addEventListener('change', () => { mlState.loci[i].gene = lblInput.value; });
+                const coordLbl = document.createElement('span'); coordLbl.className = 'ml-locus-item-label'; coordLbl.style.cssText = 'width:auto;margin-left:6px;'; coordLbl.textContent = 'Coords:';
+                const coordInput = document.createElement('input'); coordInput.type = 'text'; coordInput.value = l.raw || ''; coordInput.placeholder = 'e.g. chr7:31,376,000-31,418,000'; coordInput.style.cssText = 'flex:1;border:1px solid #d0d0d0;border-radius:3px;padding:4px 7px;font-size:12px;font-family:monospace;';
+                coordInput.addEventListener('change', () => { mlUpdateLocusCoord(i, coordInput.value); });
+                const removeBtn = document.createElement('button'); removeBtn.className = 'ml-remove-btn'; removeBtn.title = 'Remove'; removeBtn.innerHTML = '&#x2715;';
+                removeBtn.addEventListener('click', () => { mlRemoveLocus(i); });
+                row1.append(handle, lblSpan, lblInput, coordLbl, coordInput, removeBtn);
+
+                const row2 = document.createElement('div'); row2.className = 'ml-locus-item-row'; row2.style.alignItems = 'flex-start';
+                const genesLbl = document.createElement('span'); genesLbl.className = 'ml-locus-item-label'; genesLbl.style.cssText = 'width:auto;color:#4a90e2;font-weight:600;margin-top:4px;'; genesLbl.textContent = 'Visible Genes:';
+                const genesWrap = document.createElement('div'); genesWrap.style.flex = '1';
+                if (uniqueGenes.length === 0) { genesWrap.innerHTML = '<span style="font-size:11px;color:#999;">No genes found in this region.</span>'; }
+                else { const cbList = document.createElement('div'); cbList.className = 'ml-gene-cb-list'; uniqueGenes.forEach(g => { const isHidden = (l.hiddenGenes || []).includes(g); const lbl = document.createElement('label'); lbl.className = 'ml-gene-cb'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !isHidden; cb.addEventListener('change', () => mlToggleGeneVisibility(i, g, cb.checked)); lbl.appendChild(cb); lbl.appendChild(document.createTextNode(' ' + g)); cbList.appendChild(lbl); }); genesWrap.appendChild(cbList); }
+                row2.append(genesLbl, genesWrap);
+
+                item.append(row1, row2);
+                item.addEventListener('dragstart', handleLocusDragStart);
+                item.addEventListener('dragover', handleLocusDragOver);
+                item.addEventListener('drop', handleLocusDrop);
+                item.addEventListener('dragend', handleLocusDragEnd);
+                el.appendChild(item);
             }
-            if (mlState.loci.length === 0) html = '<div style="font-size:12px; color:#888; text-align:center; padding:10px;">No loci added yet.</div>';
-            el.innerHTML = html;
         }
         
         window.mlToggleGeneVisibility = function(locusIdx, geneName, isVisible) {
@@ -1757,27 +2162,113 @@
 
         async function mlRender() {
             Object.keys(mlGeneFeatureCache).forEach(k => { if (!mlState.loci.some(l => l.chr === k)) delete mlGeneFeatureCache[k]; });
-            const container = document.getElementById('mlBrowser'), activeTags = mlState.activeTagFilters || new Set(), visibleTracks = mlState.tracks.filter(t => t.visible && (activeTags.size === 0 || (t.tags || []).some(tag => activeTags.has(tag)))), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
+            const container = document.getElementById('mlBrowser'), activeTags = mlState.activeTagFilters || new Set(), visibleTracks = mlState.tracks.filter(t => t.visible && (activeTags.size === 0 || Object.values(t.tagCategories || {}).some(v => activeTags.has(v)) || (t.tags || []).some(tag => activeTags.has(tag)))), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
             if (visibleTracks.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">🔬</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No tracks visible</div><div style="font-size:12px;max-width:36ch;margin:0 auto;line-height:1.7;">Load BigWig files in the <strong>IGV Browser</strong> tab, or clear active tag filters.</div></div>'; return; }
             if (loci.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">📍</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No loci configured</div><div style="font-size:12px;max-width:38ch;margin:0 auto 20px;line-height:1.7;">Add gene loci as columns using the button below.</div><button onclick="openLocusManager()" style="padding:8px 20px;background:#4a90e2;color:white;border:none;border-radius:4px;font-size:13px;cursor:pointer;">+ Add Loci</button></div>'; return; }
 
-            const showLabels = mlState.showLabels !== false, showBorder = mlState.showBorder !== false, labelW = showLabels ? 90 : 0, borderClass = showBorder ? '' : ' no-border', gridCols = loci.map(() => '1fr').join(' '), th = mlState.trackHeight;
+            const showLabels = mlState.showLabels !== false, showBorder = mlState.showBorder !== false, borderClass = showBorder ? '' : ' no-border', gridCols = loci.map(() => '1fr').join(' '), th = mlState.trackHeight;
             const ff = mlState.fontFamily || 'Arial, sans-serif', fsGene = mlState.fontSizeGeneName || 13, fsLocusGene = mlState.fontSizeLocusGene || 13, fsCoord = mlState.fontSizeCoord || 10, fsTLabel = mlState.fontSizeTrackLabel || 11, fsYmax = mlState.fontSizeYmax || 9;
+            const useSquare = mlState.labelStyle === 'square', useCatSquares = useSquare && mlState.squareSource === 'tag';
+            const orderedCats = useCatSquares ? mlGetOrderedCategories(visibleTracks) : [];
+            const maxCats = useCatSquares ? Math.max(1, orderedCats.length) : 0;
+            const labelW = showLabels ? (useCatSquares ? maxCats * th + Math.max(0, maxCats - 1) * 2 : useSquare ? 100 : 90) : 0;
+            const rowBorder = showBorder ? 1 : 0;
 
-            let html = `<div class="ml-locus-header">`; if (showLabels) html += `<div class="ml-locus-header-label" style="width:${labelW}px"></div>`; html += `<div class="ml-locus-header-inner" style="grid-template-columns:${gridCols}">`;
-            loci.forEach(l => { const span = l.end - l.start, coordText = mlState.showSpanBar ? `${l.chr}:${fmtCoord(l.start)}&ndash;${fmtCoord(l.end)}` : `${l.chr}:${fmtCoord(l.start)}&ndash;${fmtCoord(l.end)} (${fmtBp(span)})`, spanBar = mlState.showSpanBar ? `<div class="ml-span-bar"><div class="ml-span-bar-line"></div><span>${fmtBp(span)}</span><div class="ml-span-bar-line"></div></div>` : ''; html += `<div class="ml-locus-cell"><div class="ml-locus-gene" style="font-size:${fsLocusGene}px;font-family:${ff};">${l.gene}</div><div class="ml-locus-coord" style="font-size:${fsCoord}px;font-family:${ff};">${coordText}</div>${spanBar}</div>`; });
-            html += `</div></div>`;
+            // ── Legend panel (square mode only) ──────────────────────────────
+            const legendFC = mlState.legendFontColor || '#3a4252';
+            let legendHtml = '';
+            if (useSquare && mlState.showLegend && showLabels) {
+                if (useCatSquares) {
+                    if (orderedCats.length > 0) {
+                        legendHtml += '<div class="ml-legend-panel">';
+                        orderedCats.forEach(cat => {
+                            legendHtml += `<div class="ml-legend-group-title" style="font-size:${Math.max(7, mlState.fontSizeLegend - 2)}px;color:${legendFC};opacity:0.6;">${cat}</div>`;
+                            const seenVals = new Set();
+                            visibleTracks.forEach(t => { const val = (t.tagCategories||{})[cat]; if (val && !seenVals.has(val)) { seenVals.add(val); legendHtml += `<div class="ml-legend-item" style="font-size:${mlState.fontSizeLegend}px;color:${legendFC};"><div class="ml-legend-swatch" style="width:${mlState.fontSizeLegend}px;height:${mlState.fontSizeLegend}px;background:${mlGetTagValueColor(cat, val)}"></div><span title="${val}">${val}</span></div>`; } });
+                        });
+                        legendHtml += '</div>';
+                    }
+                } else {
+                    legendHtml += '<div class="ml-legend-panel">';
+                    visibleTracks.forEach(t => { legendHtml += `<div class="ml-legend-item" style="font-size:${mlState.fontSizeLegend}px;color:${legendFC};"><div class="ml-legend-swatch" style="width:${mlState.fontSizeLegend}px;height:${mlState.fontSizeLegend}px;background:${t.color}"></div><span title="${t.name}">${t.name}</span></div>`; });
+                    legendHtml += '</div>';
+                }
+            }
+
+            // ── Figure content ────────────────────────────────────────────────
+            let figHtml = `<div class="ml-locus-header">`; if (showLabels) figHtml += `<div class="ml-locus-header-label" style="width:${labelW}px"></div>`; figHtml += `<div class="ml-locus-header-inner" style="grid-template-columns:${gridCols}">`;
+            loci.forEach(l => { const span = l.end - l.start, coordText = mlState.showSpanBar ? `${l.chr}:${fmtCoord(l.start)}&ndash;${fmtCoord(l.end)}` : `${l.chr}:${fmtCoord(l.start)}&ndash;${fmtCoord(l.end)} (${fmtBp(span)})`, spanBar = mlState.showSpanBar ? `<div class="ml-span-bar"><div class="ml-span-bar-line"></div><span>${fmtBp(span)}</span><div class="ml-span-bar-line"></div></div>` : ''; figHtml += `<div class="ml-locus-cell"><div class="ml-locus-gene" style="font-size:${fsLocusGene}px;font-family:${ff};">${l.gene}</div><div class="ml-locus-coord" style="font-size:${fsCoord}px;font-family:${ff};">${coordText}</div>${spanBar}</div>`; });
+            figHtml += `</div></div>`;
 
             visibleTracks.forEach((track, ti) => {
-                html += `<div class="ml-track-row${borderClass}">`;
-                if (showLabels) { const labelColor = mlState.labelColor === 'track' ? track.color : '#3a4252'; html += `<div class="ml-label-col" style="width:${labelW}px;height:${th}px"><div class="ml-track-label" title="${track.name}" style="font-size:${fsTLabel}px;font-family:${ff};color:${labelColor};">${track.name}</div><div class="ml-track-label-pill" style="background:${track.color};height:${th - 8}px;"></div></div>`; }
-                html += `<div class="ml-track-inner" style="grid-template-columns:${gridCols}">`;
-                loci.forEach((locus, li) => { html += `<div class="ml-track-cell" style="height:${th}px"><canvas class="ml-track-canvas" data-ti="${ti}" data-li="${li}" width="400" height="${th}" style="height:${th}px"></canvas>${mlState.showYmax ? `<span class="ml-ymax" id="ymax_${ti}_${li}" style="font-size:${fsYmax}px;font-family:${ff};">&#x2026;</span>` : ''}</div>`; });
-                html += `</div></div>`;
+                figHtml += `<div class="ml-track-row${borderClass}">`;
+                if (showLabels) {
+                    const labelColor = mlState.labelColor === 'track' ? track.color : '#3a4252';
+                    if (useCatSquares) {
+                        // Category squares are rendered as an overlay after DOM insertion (see below)
+                        // so only a size-preserving spacer is needed here
+                        const spacerContent = orderedCats.length > 0
+                            ? ''
+                            : `<div style="width:${th}px;height:${th}px;background:${track.color};flex-shrink:0;"></div>`;
+                        figHtml += `<div class="ml-label-col ml-cat-spacer" style="width:${labelW}px;height:${th}px;padding:0;overflow:visible;">${spacerContent}</div>`;
+                    } else if (useSquare) {
+                        const sqColor = track.color;
+                        figHtml += `<div class="ml-label-col" style="width:${labelW}px;height:${th}px;padding-left:4px;"><div style="width:${th}px;height:${th}px;border-radius:2px;background:${sqColor};flex-shrink:0;margin-right:5px;"></div><div class="ml-track-label" title="${track.name}" style="font-size:${fsTLabel}px;font-family:${ff};color:${labelColor};">${track.name}</div></div>`;
+                    } else {
+                        figHtml += `<div class="ml-label-col" style="width:${labelW}px;height:${th}px"><div class="ml-track-label" title="${track.name}" style="font-size:${fsTLabel}px;font-family:${ff};color:${labelColor};">${track.name}</div><div class="ml-track-label-pill" style="background:${track.color};height:${th - 8}px;"></div></div>`;
+                    }
+                }
+                figHtml += `<div class="ml-track-inner" style="grid-template-columns:${gridCols}">`;
+                loci.forEach((locus, li) => { figHtml += `<div class="ml-track-cell" style="height:${th}px"><canvas class="ml-track-canvas" data-ti="${ti}" data-li="${li}" width="400" height="${th}" style="height:${th}px"></canvas>${mlState.showYmax ? `<span class="ml-ymax" id="ymax_${ti}_${li}" style="font-size:${fsYmax}px;font-family:${ff};">&#x2026;</span>` : ''}</div>`; });
+                figHtml += `</div></div>`;
             });
 
-            if (mlState.showGene) { html += `<div class="ml-gene-row">`; if (showLabels) html += `<div class="ml-locus-header-label" style="width:${labelW}px"></div>`; html += `<div class="ml-gene-inner" style="grid-template-columns:${gridCols}">`; loci.forEach((locus, li) => { html += `<div class="ml-gene-cell"><svg data-gene-li="${li}" class="ml-gene-svg" preserveAspectRatio="none"></svg></div>`; }); html += `</div></div>`; }
+            if (mlState.showGene) { figHtml += `<div class="ml-gene-row">`; if (showLabels) figHtml += `<div class="ml-locus-header-label" style="width:${labelW}px"></div>`; figHtml += `<div class="ml-gene-inner" style="grid-template-columns:${gridCols}">`; loci.forEach((locus, li) => { figHtml += `<div class="ml-gene-cell"><svg data-gene-li="${li}" class="ml-gene-svg" preserveAspectRatio="none"></svg></div>`; }); figHtml += `</div></div>`; }
+
+            const figWrapped = `<div class="ml-fig-content" style="position:relative;">${figHtml}</div>`;
+            const html = legendHtml
+                ? `<div class="ml-browser-flex">${legendHtml}<div class="ml-browser-content">${figWrapped}</div></div>`
+                : figWrapped;
             container.innerHTML = html;
+
+            // ── Category label bars overlay (useCatSquares mode) ─────────────
+            if (useCatSquares && showLabels && orderedCats.length > 0) {
+                requestAnimationFrame(() => {
+                    const figContent = container.querySelector('.ml-fig-content');
+                    const headerEl = figContent && figContent.querySelector('.ml-locus-header');
+                    if (!figContent || !headerEl) return;
+                    const headerH = headerEl.offsetHeight;
+                    const catFs = mlState.fontSizeCatLabel || Math.max(7, Math.floor(th * 0.22));
+                    const rowH = th + rowBorder; // height of one track row including its border
+
+                    let overlayHtml = `<div style="position:absolute;top:${headerH}px;left:0;width:${labelW}px;display:flex;flex-direction:row;pointer-events:none;z-index:2;">`;
+                    orderedCats.forEach(cat => {
+                        overlayHtml += `<div style="width:${th}px;display:flex;flex-direction:column;">`;
+                        let gi = 0;
+                        while (gi < visibleTracks.length) {
+                            const val = (visibleTracks[gi].tagCategories || {})[cat];
+                            if (!val) {
+                                overlayHtml += `<div style="height:${rowH}px;flex-shrink:0;"></div>`;
+                                gi++;
+                                continue;
+                            }
+                            let count = 1;
+                            while (gi + count < visibleTracks.length && (visibleTracks[gi + count].tagCategories || {})[cat] === val) count++;
+                            const color = mlGetTagValueColor(cat, val);
+                            const boxH = count * rowH;
+                            const catEnabled = mlState.catLabelsEnabled && mlState.catLabelsEnabled[cat] === true;
+                            const textHtml = catEnabled
+                                ? `<span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:${catFs}px;color:${mlState.catLabelColor};font-weight:700;letter-spacing:0.05em;font-family:${ff};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-height:${boxH - 4}px;">${val}</span>`
+                                : '';
+                            overlayHtml += `<div style="height:${boxH}px;flex-shrink:0;background:${color};display:flex;align-items:center;justify-content:center;overflow:hidden;">${textHtml}</div>`;
+                            gi += count;
+                        }
+                        overlayHtml += `</div>`;
+                    });
+                    overlayHtml += `</div>`;
+                    figContent.insertAdjacentHTML('beforeend', overlayHtml);
+                });
+            }
 
             const binGrid = [];
             await Promise.all(visibleTracks.map(async (track, ti) => { binGrid[ti] = []; await Promise.all(loci.map(async (locus, li) => { if (!track.file || /\.bed$/i.test(track.file.name)) { binGrid[ti][li] = null; return; } try { binGrid[ti][li] = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { binGrid[ti][li] = null; } })); }));
@@ -1923,29 +2414,83 @@
             const visibleTracks = mlState.tracks.filter(t => t.visible), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
             if (!visibleTracks.length || !loci.length) { alert('Nothing to export.'); return; }
             const trackW = mlState.exportColW || 260, scale = mlState.exportScale || 2, gap = 10, pillW = 5, ff = (mlState.fontFamily || 'Arial, sans-serif').replace(/'/g, ''), fsGene = mlState.fontSizeGeneName || 13, fsCoord = mlState.fontSizeCoord || 10, fsYmax = mlState.fontSizeYmax || 9, fsTLabel = mlState.fontSizeTrackLabel || 11;
+            const useSquare = mlState.labelStyle === 'square', useCatSquares = useSquare && mlState.squareSource === 'tag';
+            const th = mlState.trackHeight;
+            const expMaxCats = useCatSquares ? Math.max(1, ...visibleTracks.map(t => Object.keys(t.tagCategories || {}).length)) : 0;
             let labelW = 0;
             if (mlState.showLabels) {
-                const _mc = document.createElement('canvas').getContext('2d'); _mc.font = `${fsTLabel}px ${ff}`;
-                visibleTracks.forEach(t => labelW = Math.max(labelW, _mc.measureText(t.name).width)); labelW = Math.ceil(labelW) + pillW + 16;
+                if (useCatSquares) {
+                    labelW = expMaxCats * th + Math.max(0, expMaxCats - 1) * 2;
+                } else {
+                    const _mc = document.createElement('canvas').getContext('2d'); _mc.font = `${fsTLabel}px ${ff}`;
+                    visibleTracks.forEach(t => labelW = Math.max(labelW, _mc.measureText(t.name).width)); labelW = Math.ceil(labelW) + (useSquare ? th + 10 : pillW + 16);
+                }
             }
-            const th = mlState.trackHeight, headerH = 46, _geneSvg = document.querySelector('svg[data-gene-li]'), geneH = mlState.showGene ? (_geneSvg ? +_geneSvg.dataset.geneHeight || _geneSvg.getBoundingClientRect().height : 52) : 0;
-            const totalW = labelW + loci.length * (trackW + gap) - gap + 10, totalH = headerH + visibleTracks.length * (th + 2) + (mlState.showGene ? geneH + 6 : 0) + 10, sw = totalW * scale, sh = totalH * scale;
+
+            // legend column width (per-category mode: shows unique values per category)
+            let legendW = 0;
+            if (useSquare && mlState.showLegend && mlState.showLabels) {
+                const _mc = document.createElement('canvas').getContext('2d'); _mc.font = `${fsTLabel}px ${ff}`;
+                if (useCatSquares) {
+                    const allVals = [...new Set(visibleTracks.flatMap(t => Object.values(t.tagCategories || {})))];
+                    allVals.forEach(v => legendW = Math.max(legendW, _mc.measureText(v).width));
+                } else {
+                    visibleTracks.forEach(t => legendW = Math.max(legendW, _mc.measureText(t.name).width));
+                }
+                legendW = Math.ceil(legendW) + 30;
+            }
+
+            const headerH = 46, _geneSvg = document.querySelector('svg[data-gene-li]'), geneH = mlState.showGene ? (_geneSvg ? +_geneSvg.dataset.geneHeight || _geneSvg.getBoundingClientRect().height : 52) : 0;
+            const totalW = legendW + labelW + loci.length * (trackW + gap) - gap + 10, totalH = headerH + visibleTracks.length * (th + 2) + (mlState.showGene ? geneH + 6 : 0) + 10, sw = totalW * scale, sh = totalH * scale;
+            const figX = legendW;
 
             let svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${sw}" height="${sh}" viewBox="0 0 ${totalW} ${totalH}">\n<rect width="${totalW}" height="${totalH}" fill="white" stroke="none"/>\n<style>text{font-family:${ff}}</style>`;
+
+            // legend SVG elements
+            if (legendW > 0) {
+                const sqSz = 11, rowH = 16, pad = 8, titleH = 18;
+                let ly = headerH;
+                svg += `<line x1="${legendW - 1}" y1="0" x2="${legendW - 1}" y2="${totalH}" stroke="#e4e7ec" stroke-width="0.5"/>`;
+                if (useCatSquares) {
+                    const cats = [...new Set(visibleTracks.flatMap(t => Object.keys(t.tagCategories || {})))];
+                    cats.forEach(cat => {
+                        svg += `<text x="${pad}" y="${ly + 11}" font-size="9" font-weight="700" fill="#9aa3b8" letter-spacing="0.5">${cat.toUpperCase()}</text>`; ly += titleH;
+                        const seenVals = new Set();
+                        visibleTracks.forEach(t => { const val = (t.tagCategories||{})[cat]; if (val && !seenVals.has(val)) { seenVals.add(val); const c = mlGetTagValueColor(cat, val); svg += `<rect x="${pad}" y="${ly + 2}" width="${sqSz}" height="${sqSz}" rx="2" fill="${c}"/><text x="${pad + sqSz + 4}" y="${ly + sqSz - 1}" font-size="${fsTLabel}" fill="#3a4252">${val}</text>`; ly += rowH; } });
+                    });
+                } else {
+                    visibleTracks.forEach(t => { svg += `<rect x="${pad}" y="${ly + 2}" width="${sqSz}" height="${sqSz}" rx="2" fill="${t.color}"/><text x="${pad + sqSz + 4}" y="${ly + sqSz - 1}" font-size="${fsTLabel}" fill="#3a4252">${t.name}</text>`; ly += rowH; });
+                }
+            }
+
             loci.forEach((l, li) => {
-                const span = l.end - l.start, cx = labelW + li * (trackW + gap) + trackW / 2, coordText = mlState.showSpanBar ? `${l.chr}:${fmtCoord(l.start)}-${fmtCoord(l.end)}` : `${l.chr}:${fmtCoord(l.start)}-${fmtCoord(l.end)} (${fmtBp(span)})`;
+                const span = l.end - l.start, cx = figX + labelW + li * (trackW + gap) + trackW / 2, coordText = mlState.showSpanBar ? `${l.chr}:${fmtCoord(l.start)}-${fmtCoord(l.end)}` : `${l.chr}:${fmtCoord(l.start)}-${fmtCoord(l.end)} (${fmtBp(span)})`;
                 svg += `<text x="${cx}" y="18" text-anchor="middle" font-size="${fsGene}" font-weight="700" font-style="italic" fill="#1a1d23">${l.gene}</text><text x="${cx}" y="32" text-anchor="middle" font-size="${fsCoord}" fill="#8a94a8" font-family="monospace">${coordText}</text>`;
                 if (mlState.showSpanBar) {
-                    const xL = labelW + li * (trackW + gap), xR = xL + trackW, label = fmtBp(span), mid = (xL + xR) / 2;
+                    const xL = figX + labelW + li * (trackW + gap), xR = xL + trackW, label = fmtBp(span), mid = (xL + xR) / 2;
                     svg += `<line x1="${xL+2}" y1="39" x2="${mid-18}" y2="39" stroke="#8a94a8" stroke-width="0.75"/><line x1="${mid+18}" y1="39" x2="${xR-2}" y2="39" stroke="#8a94a8" stroke-width="0.75"/><text x="${mid}" y="42" text-anchor="middle" font-size="8" fill="#8a94a8" font-family="monospace">${label}</text><polygon points="${xL+2},39 ${xL+7},36.5 ${xL+7},41.5" fill="#8a94a8"/><polygon points="${xR-2},39 ${xR-7},36.5 ${xR-7},41.5" fill="#8a94a8"/>`;
-                } else svg += `<line x1="${labelW + li*(trackW+gap)}" y1="40" x2="${labelW + li*(trackW+gap)+trackW}" y2="40" stroke="#dde2ea" stroke-width="0.75"/>`;
+                } else svg += `<line x1="${figX + labelW + li*(trackW+gap)}" y1="40" x2="${figX + labelW + li*(trackW+gap)+trackW}" y2="40" stroke="#dde2ea" stroke-width="0.75"/>`;
             });
 
             visibleTracks.forEach((track, ti) => {
                 const y = headerH + ti * (th + 2), labelColor = mlState.labelColor === 'track' ? track.color : '#3a4252';
-                if (mlState.showLabels) { svg += `<rect x="${labelW - pillW - 4}" y="${y+4}" width="${pillW}" height="${th-8}" rx="2" fill="${track.color}"/><text x="${labelW - pillW - 8}" y="${y + th/2 + fsTLabel*0.35}" text-anchor="end" font-size="${fsTLabel}" fill="${labelColor}">${track.name}</text>`; }
+                if (mlState.showLabels) {
+                    if (useCatSquares) {
+                        const cats = Object.entries(track.tagCategories || {});
+                        let cx = figX;
+                        if (cats.length > 0) {
+                            cats.forEach(([cat, val]) => { svg += `<rect x="${cx}" y="${y}" width="${th}" height="${th}" fill="${mlGetTagValueColor(cat, val)}"/>`; cx += th + 2; });
+                        } else {
+                            svg += `<rect x="${cx}" y="${y}" width="${th}" height="${th}" fill="${track.color}"/>`;
+                        }
+                    } else if (useSquare) {
+                        svg += `<rect x="${figX + 4}" y="${y}" width="${th}" height="${th}" rx="2" fill="${track.color}"/><text x="${figX + th + 8}" y="${y + th/2 + fsTLabel*0.35}" font-size="${fsTLabel}" fill="${labelColor}">${track.name}</text>`;
+                    } else {
+                        svg += `<rect x="${figX + labelW - pillW - 4}" y="${y+4}" width="${pillW}" height="${th-8}" rx="2" fill="${track.color}"/><text x="${figX + labelW - pillW - 8}" y="${y + th/2 + fsTLabel*0.35}" text-anchor="end" font-size="${fsTLabel}" fill="${labelColor}">${track.name}</text>`;
+                    }
+                }
                 loci.forEach((locus, li) => {
-                    const x = labelW + li * (trackW + gap), canvas = document.querySelector(`canvas[data-ti="${ti}"][data-li="${li}"]`); if (!canvas) return;
+                    const x = figX + labelW + li * (trackW + gap), canvas = document.querySelector(`canvas[data-ti="${ti}"][data-li="${li}"]`); if (!canvas) return;
                     try { const dataUrl = canvas.toDataURL('image/png'); svg += `<image x="${x}" y="${y}" width="${trackW}" height="${th}" href="${dataUrl}" preserveAspectRatio="none"/>`; if (mlState.showBorder) svg += `<rect x="${x}" y="${y}" width="${trackW}" height="${th}" fill="none" stroke="#edf0f5" stroke-width="0.5"/>`; } catch(e) {}
                     if (mlState.showYmax) { const el = document.getElementById('ymax_' + ti + '_' + li); if (el && el.textContent !== '…') svg += `<text x="${x+trackW-3}" y="${y+fsYmax+2}" text-anchor="end" font-size="${fsYmax}" fill="#c0c8d8" font-family="monospace">${el.textContent}</text>`; }
                 });
@@ -1955,7 +2500,7 @@
                 const geneY = headerH + visibleTracks.length * (th + 2) + 14, geneCells = Array.from(document.getElementById('mlBrowser').querySelectorAll('.ml-gene-cell'));
                 geneCells.forEach((cell, li) => {
                     const svgEl = cell.querySelector('svg[data-gene-li]'); if (!svgEl) return;
-                    const x = labelW + li * (trackW + gap), w = cell.getBoundingClientRect().width || trackW, h = Math.max(90, +(svgEl.dataset.geneHeight || 0) || 90);
+                    const x = figX + labelW + li * (trackW + gap), w = cell.getBoundingClientRect().width || trackW, h = Math.max(90, +(svgEl.dataset.geneHeight || 0) || 90);
                     svg += `<g transform="translate(${x},${geneY})"><svg xmlns="http://www.w3.org/2000/svg" width="${trackW}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${svgEl.innerHTML}</svg></g>`;
                 });
             }
