@@ -275,8 +275,8 @@
                 <strong>📋 How to share sessions with collaborators:</strong>
                 1. Load your BigWig files and configure track names/colors<br>
                 2. Click "Save Session Config" to download config.json<br>
-                3. Share a folder containing config.json + all BigWig/BED files<br>
-                4. Recipients can drag &amp; drop the entire folder to load everything with your exact settings!<br>
+                3. Share a folder containing config.json + local BigWig/BED files, or put http(s) URLs in config.json for server-hosted tracks<br>
+                4. Recipients can drag &amp; drop the folder, or just config.json when all tracks are remote, to load everything with your exact settings!<br>
                 <span style="color:#2c5d7f;"><strong>Custom genomes:</strong> also include your FASTA, .fai index, and GTF/GFF annotation files in the shared folder — they will be detected automatically.</span>
             </div>
 
@@ -285,7 +285,7 @@
                 
                 <div class="section">
                     <h3>📁 Drop Session Folder or Select Files</h3>
-                    <p>Upload a folder containing config.json and BigWig/BED files, or select them individually.</p>
+                    <p>Upload a folder containing config.json and BigWig/BED files, select files individually, or load config.json by itself when tracks use http(s) URLs.</p>
                     
                     <div class="file-drop-zone" id="dropZone">
                         <div class="drop-icon">📂</div>
@@ -699,6 +699,37 @@
             return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
+        function isRemoteUrl(value) {
+            return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+        }
+
+        function normalizeTrackConfig(track) {
+            const source = track.file || track.url || '';
+            return { ...track, file: source, autoscaleGroup: track.autoscaleGroup !== undefined ? track.autoscaleGroup : null, height: track.height || null };
+        }
+
+        function getTrackSource(track) {
+            const source = track.file || track.url;
+            if (isRemoteUrl(source)) return { kind: 'remote', url: source.trim() };
+            const localFile = source ? sessionData.bigWigFiles[source] : null;
+            return localFile ? { kind: 'local', file: localFile } : null;
+        }
+
+        function buildIgvTrackConfig(track, source) {
+            const isBed = (track.format || '').toLowerCase() === 'bed' || /\.bed(?:$|\?)/i.test(track.file || track.url || '');
+            const igvTrack = {
+                name: track.name,
+                type: isBed ? 'annotation' : (track.type || 'wig'),
+                format: isBed ? 'bed' : (track.format || 'bigwig'),
+                url: source.kind === 'remote' ? source.url : mkObjectURL(source.file),
+                color: track.color,
+                height: track.height || 50
+            };
+            if (isBed) igvTrack.displayMode = 'COLLAPSED';
+            else { igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0; }
+            return igvTrack;
+        }
+
         function isCustomGenome(id) { return id && id.startsWith('custom:'); }
         function getCustomGenomeId(id) { return id ? id.replace('custom:', '') : ''; }
 
@@ -880,10 +911,6 @@
                     else if (file.name.match(/\.(fa|fasta|fna|fai|gzi)(\.gz)?$/i) || file.name.match(/\.(gtf|gff|gff3)(\.gz)?$/i)) refFiles.push(file);
                 }
 
-                if (bigWigFiles.length === 0 && bedFiles.length === 0) {
-                    statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload .bw, .bigWig, or .bed files.</div>'; return;
-                }
-
                 const parsedRef = parseReferenceFiles(refFiles);
                 if (parsedRef) { sessionData.referenceFiles = parsedRef; sessionData.pendingRefFiles = null; }
                 else if (refFiles.length > 0) sessionData.pendingRefFiles = refFiles;
@@ -895,11 +922,16 @@
                 bigWigFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
                 bedFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
                 refFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">📎 ${escHtml(f.name)}</div>`);
-                fileListDiv.classList.remove('hidden');
 
                 sessionData.bigWigFiles = {};
-                for (const file of bigWigFiles) sessionData.bigWigFiles[file.name] = file;
-                for (const file of bedFiles) sessionData.bigWigFiles[file.name] = file;
+                for (const file of bigWigFiles) {
+                    sessionData.bigWigFiles[file.name] = file;
+                    if (file.webkitRelativePath) sessionData.bigWigFiles[file.webkitRelativePath] = file;
+                }
+                for (const file of bedFiles) {
+                    sessionData.bigWigFiles[file.name] = file;
+                    if (file.webkitRelativePath) sessionData.bigWigFiles[file.webkitRelativePath] = file;
+                }
 
                 if (mlConfigFile) {
                     try { sessionData.mlConfig = JSON.parse(await mlConfigFile.text()); sessionData.mlConfigApplied = false; } catch(e) { console.warn('ml_config.json parse error', e); }
@@ -909,15 +941,31 @@
                     const config = JSON.parse(await configFile.text());
                     sessionData.genome = config.genome || 'hg38'; sessionData.locus = config.region || null;
                     sessionData.autoscaleGroups = config.autoscaleGroups || [];
-                    if (config.tracks) sessionData.tracks = config.tracks.map(t => ({ ...t, autoscaleGroup: t.autoscaleGroup !== undefined ? t.autoscaleGroup : null, height: t.height || null }));
+                    if (config.tracks) sessionData.tracks = config.tracks.map(normalizeTrackConfig);
                     else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded!</div>';
                 } else {
+                    if (bigWigFiles.length === 0 && bedFiles.length === 0) {
+                        statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload config.json, .bw/.bigWig, or .bed files.</div>'; return;
+                    }
                     if (parsedRef) sessionData.genome = 'custom:' + parsedRef.fasta.name.replace(/\.(fa|fasta|fna)$/i, '');
                     else sessionData.genome = 'hg38';
                     sessionData.autoscaleGroups = []; sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded!</div>';
                 }
+
+                const resolvableTracks = sessionData.tracks.filter(track => getTrackSource(track));
+                const remoteTrackCount = sessionData.tracks.filter(track => isRemoteUrl(track.file || track.url)).length;
+                const missingTracks = sessionData.tracks.filter(track => !getTrackSource(track));
+                if (remoteTrackCount > 0) fileListDiv.innerHTML += `<div class="file-item">🌐 ${remoteTrackCount} remote track${remoteTrackCount === 1 ? '' : 's'} from config.json</div>`;
+                fileListDiv.classList.remove('hidden');
+
+                if (resolvableTracks.length === 0) {
+                    const missing = missingTracks.slice(0, 5).map(t => escHtml(t.file || t.url || t.name)).join('<br>');
+                    statusDiv.innerHTML = `<div class="status-message status-error">❌ No loadable tracks found. Add local .bw/.bed files or use http(s) URLs in config.json.${missing ? '<br><br>Missing:<br>' + missing : ''}</div>`;
+                    return;
+                }
+                if (missingTracks.length > 0) console.warn('Tracks skipped because their files were not found locally and are not remote URLs:', missingTracks);
 
                 if (needsReferenceFilePrompt(sessionData.genome)) { showReferenceFilePrompt(sessionData.genome); return; }
 
@@ -1064,14 +1112,11 @@
             
             sessionData.trackViewIndices = [];
             for (let i = 0; i < sessionData.tracks.length; i++) {
-                const track = sessionData.tracks[i]; const file = sessionData.bigWigFiles[track.file];
-                if (file) {
-                    const isBed = track.format === 'bed';
-                    const igvTrack = { name: track.name, type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', url: mkObjectURL(file), color: track.color, height: track.height || 50 };
-                    if (isBed) igvTrack.displayMode = 'COLLAPSED'; else { igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0; }
-                    igvOptions.tracks.push(igvTrack);
-                    sessionData.trackViewIndices.push(i);
-                }
+                const track = sessionData.tracks[i];
+                const source = getTrackSource(track);
+                if (!source) continue;
+                igvOptions.tracks.push(buildIgvTrackConfig(track, source));
+                sessionData.trackViewIndices.push(i);
             }
             if (customAnnotationTrack) igvOptions.tracks.push(customAnnotationTrack);
 
@@ -1322,8 +1367,8 @@
             const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = 'config.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-            if (isCustomGenome(sessionData.genome)) alert('✅ Config saved!\n\nTo share with collaborators:\nPut config.json, your BigWig/BED track files, AND your reference files (FASTA, .fai index, GTF/GFF annotation) all in one folder and share it.\n\nWhen your collaborator drops the folder into the app the reference files will be detected automatically. If they prefer, they can also load the reference files separately using the file picker shown when the session opens.');
-            else alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and all BigWig files in one folder\n2. Share the folder\n3. They can drag & drop it to load everything!');
+            if (isCustomGenome(sessionData.genome)) alert('✅ Config saved!\n\nTo share with collaborators:\nPut config.json, any local BigWig/BED track files, AND your reference files (FASTA, .fai index, GTF/GFF annotation) all in one folder and share it. Tracks with http(s) URLs do not need to be copied locally.\n\nWhen your collaborator drops the folder into the app the reference files will be detected automatically. If they prefer, they can also load the reference files separately using the file picker shown when the session opens.');
+            else alert('✅ Config saved!\n\nTo share with others:\n1. Put config.json and any local BigWig files in one folder\n2. Tracks with http(s) URLs in config.json can stay on the server\n3. They can drag & drop the folder, or just config.json when all tracks are remote, to load everything!');
         }
 
         function exportImage() {
@@ -1533,8 +1578,11 @@
         function mlSyncTracksFromSession() {
             const existing = {}; mlState.tracks.forEach(t => existing[t.name] = t);
             mlState.tracks = sessionData.tracks.map(t => {
-                if (existing[t.name]) { existing[t.name].color = t.color; existing[t.name].file = sessionData.bigWigFiles[t.file] || null; existing[t.name].autoscaleGroup = t.autoscaleGroup || null; if (!existing[t.name].tags) existing[t.name].tags = []; if (!existing[t.name].tagCategories) existing[t.name].tagCategories = {}; return existing[t.name]; }
-                return { name: t.name, color: t.color, visible: true, file: sessionData.bigWigFiles[t.file] || null, autoscaleGroup: t.autoscaleGroup || null, tags: [], tagCategories: {}, cache: {}, manualYmax: null };
+                const source = getTrackSource(t);
+                const localFile = source && source.kind === 'local' ? source.file : null;
+                const sourceUrl = source && source.kind === 'remote' ? source.url : null;
+                if (existing[t.name]) { existing[t.name].color = t.color; existing[t.name].file = localFile; existing[t.name].sourceUrl = sourceUrl; existing[t.name].autoscaleGroup = t.autoscaleGroup || null; if (!existing[t.name].tags) existing[t.name].tags = []; if (!existing[t.name].tagCategories) existing[t.name].tagCategories = {}; return existing[t.name]; }
+                return { name: t.name, color: t.color, visible: true, file: localFile, sourceUrl, autoscaleGroup: t.autoscaleGroup || null, tags: [], tagCategories: {}, cache: {}, manualYmax: null };
             });
             mlRenderSidebar(); mlRenderTagFilters(); mlRenderTagCategoryDefs();
         }
@@ -2317,7 +2365,7 @@
             let bins = preloadedBins !== undefined ? preloadedBins : null, readError = null;
             if (bins === null) { if (track.file) try { bins = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { readError = e; } }
 
-            if (!bins || bins.every(v => v === 0)) { ctx.fillStyle = mlState.showTrackBg ? '#eee' : '#f8f8f8'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#bbb'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText(readError ? 'read error' : (!track.file ? 'no file' : 'no data'), W/2, H/2 + 4); return; }
+            if (!bins || bins.every(v => v === 0)) { ctx.fillStyle = mlState.showTrackBg ? '#eee' : '#f8f8f8'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#bbb'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText(readError ? 'read error' : (!track.file ? (track.sourceUrl ? 'remote IGV only' : 'no file') : 'no data'), W/2, H/2 + 4); return; }
 
             let ymax = (preloadedYmax !== undefined && preloadedYmax > 0) ? preloadedYmax : Math.max(...bins); if (ymax <= 0) ymax = 1;
             const ymaxEl = document.getElementById('ymax_' + ti + '_' + li); if (ymaxEl) ymaxEl.textContent = (mlState.ymaxMode === 'range') ? `0\u2013${ymax.toFixed(2)}` : ymax.toFixed(2);
