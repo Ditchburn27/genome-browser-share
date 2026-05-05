@@ -1077,10 +1077,18 @@
 
             try {
                 igvBrowser = await igv.createBrowser(document.getElementById('igvContainer'), igvOptions);
-                let igvDragged = false; const igvEl = document.getElementById('igvContainer');
-                igvEl.addEventListener('mousedown', function() { igvDragged = false; });
-                igvEl.addEventListener('mousemove', function(e) { if (e.buttons > 0) igvDragged = true; });
-                igvEl.addEventListener('mouseup', function() { if (igvDragged) setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0); igvDragged = false; });
+                let igvMouseDown = null; const igvEl = document.getElementById('igvContainer');
+                const DRAG_THRESHOLD = 5;
+                igvEl.addEventListener('mousedown', function(e) { igvMouseDown = { x: e.clientX, y: e.clientY }; });
+                igvEl.addEventListener('mousemove', function() {});
+                igvEl.addEventListener('mouseup', function(e) {
+                    if (igvMouseDown) {
+                        const dx = e.clientX - igvMouseDown.x, dy = e.clientY - igvMouseDown.y;
+                        if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD)
+                            setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0);
+                    }
+                    igvMouseDown = null;
+                });
                 igvEl.addEventListener('wheel', function() { setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0); }, { passive: true });
                 renderTrackControls(); renderGroupList(); updateGroupCountDisplay();
             } catch (error) {
