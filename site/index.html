@@ -412,6 +412,8 @@
             <button onclick="document.getElementById('addTracksFolderInput').click()" class="secondary" title="Add every track file inside a folder">📁 Add Folder</button>
             <input type="file" id="addTracksFilesInput" multiple accept=".bw,.bigwig,.bigWig,.bed" style="display:none;" onchange="handleAddTracksFilesSelect(event)">
             <input type="file" id="addTracksFolderInput" webkitdirectory directory multiple style="display:none;" onchange="handleAddTracksFolderSelect(event)">
+            <button onclick="document.getElementById('csvImportInput').click()" class="secondary" title="Import track settings from a CSV file">📋 Import CSV</button>
+            <input type="file" id="csvImportInput" accept=".csv,.txt" style="display:none;" onchange="handleCSVImportSelect(event)">
             <button onclick="saveSessionConfig()" class="secondary">💾 Save Session Config</button>
             <button onclick="exportImage()" class="secondary">📷 Export Image</button>
             <button onclick="backToSetup()" class="secondary">← Back to Setup</button>
@@ -1046,6 +1048,118 @@
                     if (document.getElementById('tabMultilocus') && document.getElementById('tabMultilocus').classList.contains('active')) mlRender();
                 }
             }
+        }
+
+        function parseCSV(text) {
+            const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+            if (lines.length < 2) return { error: 'CSV must have a header row and at least one data row.' };
+            const splitCSVLine = (line) => {
+                const fields = []; let current = '', inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (ch === '"') { inQuotes = !inQuotes; }
+                    else if (ch === ',' && !inQuotes) { fields.push(current.trim()); current = ''; }
+                    else { current += ch; }
+                }
+                fields.push(current.trim());
+                return fields;
+            };
+            const rawHeaders = splitCSVLine(lines[0]);
+            const headers = rawHeaders.map(h => h.toLowerCase());
+            const headerAliases = { file: ['file', 'filename', 'bigwig file', 'bigwig'], name: ['name', 'track name', 'track'], color: ['color', 'colour', 'hex', 'hex color'], autoscalegroup: ['autoscale group', 'group', 'autoscalegroup'] };
+            const colMap = {};
+            for (const [key, aliases] of Object.entries(headerAliases)) {
+                const idx = headers.findIndex(h => aliases.includes(h));
+                if (idx !== -1) colMap[key] = idx;
+            }
+            if (colMap.file === undefined) return { error: 'CSV must have a "file" column.' };
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                const fields = splitCSVLine(lines[i]);
+                const row = {};
+                for (const [key, idx] of Object.entries(colMap)) row[key] = fields[idx] || '';
+                rows.push(row);
+            }
+            return { colMap, rows };
+        }
+
+        function handleCSVImportSelect(event) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                const parsed = parseCSV(reader.result);
+                if (parsed.error) { alert('CSV Error: ' + parsed.error); return; }
+                applyCSVImport(parsed.rows);
+            };
+            reader.readAsText(file);
+        }
+
+        function applyCSVImport(rows) {
+            let matched = 0, unmatched = [];
+            const unmatchedFiles = [];
+            const newGroups = new Set(sessionData.autoscaleGroups);
+            const updates = [];
+
+            for (const row of rows) {
+                if (!row.file) continue;
+                let idx = -1;
+                for (let i = 0; i < sessionData.tracks.length; i++) {
+                    if (sessionData.tracks[i].file === row.file) { idx = i; break; }
+                }
+                if (idx === -1) {
+                    const csvBase = row.file.split('/').pop().split('\\').pop();
+                    for (let i = 0; i < sessionData.tracks.length; i++) {
+                        const tBase = (sessionData.tracks[i].file || '').split('/').pop().split('\\').pop();
+                        if (tBase === csvBase) { idx = i; break; }
+                    }
+                }
+                if (idx === -1) { unmatchedFiles.push(row.file); continue; }
+
+                const track = sessionData.tracks[idx];
+                const oldName = track.name;
+                const newName = row.name ? row.name.trim() : null;
+                let newColor = null;
+                if (row.color && /^#[0-9A-Fa-f]{6}$/.test(row.color.trim())) newColor = row.color.trim();
+                const newGroup = row.autoscalegroup ? row.autoscalegroup.trim() : null;
+
+                updates.push({ idx, oldName, newName, newColor, newGroup });
+                if (newGroup) newGroups.add(newGroup);
+                matched++;
+            }
+
+            sessionData.autoscaleGroups = Array.from(newGroups);
+
+            for (const u of updates) {
+                const track = sessionData.tracks[u.idx];
+                if (u.newName) track.name = u.newName;
+                if (u.newColor) track.color = u.newColor;
+                if (u.newGroup !== undefined) track.autoscaleGroup = u.newGroup || null;
+            }
+
+            if (igvBrowser && igvBrowser.trackViews) {
+                for (const u of updates) {
+                    for (const tv of igvBrowser.trackViews) {
+                        if (tv.track && tv.track.name === u.oldName) {
+                            if (u.newName) tv.track.name = u.newName;
+                            if (u.newColor) tv.track.color = u.newColor;
+                            if (u.newGroup !== undefined) tv.track.autoscaleGroup = u.newGroup || undefined;
+                            break;
+                        }
+                    }
+                }
+                igvBrowser.updateViews();
+            }
+
+            renderTrackControls();
+            renderGroupList();
+            updateGroupCountDisplay();
+            if (typeof mlSyncTracksFromSession === 'function' && Array.isArray(mlState && mlState.tracks)) mlSyncTracksFromSession();
+
+            let msg = 'CSV Import Complete\n\nMatched: ' + matched + ' track(s) updated';
+            if (unmatchedFiles.length) msg += '\nUnmatched: ' + unmatchedFiles.length + ' row(s)\n\nUnmatched files:\n- ' + unmatchedFiles.join('\n- ');
+            alert(msg);
         }
 
         async function createNewSession() {
