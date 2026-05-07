@@ -687,7 +687,7 @@
 
     <script>
         let igvBrowser = null;
-        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false };
+        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], autoscaleGroupSettings: {}, referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
         let dragSourceIndex = null;
@@ -728,7 +728,16 @@
                 height: track.height || 50
             };
             if (isBed) igvTrack.displayMode = 'COLLAPSED';
-            else { igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0; }
+            else {
+                const gs = track.autoscaleGroup && sessionData.autoscaleGroupSettings[track.autoscaleGroup];
+                if (gs && (gs.yMin != null || gs.yMax != null)) {
+                    igvTrack.autoscale = false;
+                    if (gs.yMin != null) igvTrack.min = gs.yMin;
+                    if (gs.yMax != null) igvTrack.max = gs.yMax;
+                } else {
+                    igvTrack.autoscale = true; igvTrack.autoscaleGroup = track.autoscaleGroup || undefined; igvTrack.min = 0;
+                }
+            }
             return igvTrack;
         }
 
@@ -943,6 +952,7 @@
                     const config = JSON.parse(await configFile.text());
                     sessionData.genome = config.genome || 'hg38'; sessionData.locus = config.region || null;
                     sessionData.autoscaleGroups = config.autoscaleGroups || [];
+                    sessionData.autoscaleGroupSettings = config.autoscaleGroupSettings || {};
                     if (config.tracks) sessionData.tracks = config.tracks.map(normalizeTrackConfig);
                     else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded!</div>';
@@ -952,7 +962,7 @@
                     }
                     if (parsedRef) sessionData.genome = 'custom:' + parsedRef.fasta.name.replace(/\.(fa|fasta|fna)$/i, '');
                     else sessionData.genome = 'hg38';
-                    sessionData.autoscaleGroups = []; sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
+                    sessionData.autoscaleGroups = []; sessionData.autoscaleGroupSettings = {}; sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded!</div>';
                 }
 
@@ -1175,7 +1185,7 @@
 
             try {
                 sessionData.genome = genome; sessionData.locus = location || null; sessionData.bigWigFiles = {};
-                sessionData.autoscaleGroups = ['Group 1']; sessionData.referenceFiles = null;
+                sessionData.autoscaleGroups = ['Group 1']; sessionData.autoscaleGroupSettings = {}; sessionData.referenceFiles = null;
 
                 if (isCustomGenome(genome)) {
                     const genomeId = getCustomGenomeId(genome);
@@ -1392,18 +1402,16 @@
             } else toolbar.classList.remove('visible');
         }
 
-        function assignSelectedToGroup() {
+        async function assignSelectedToGroup() {
             const groupName = document.getElementById('groupAssignSelect').value || null;
+            const oldGroups = new Set();
             selectedTracks.forEach(index => {
+                const oldGroup = sessionData.tracks[index].autoscaleGroup;
+                if (oldGroup) oldGroups.add(oldGroup);
                 sessionData.tracks[index].autoscaleGroup = groupName;
-                if (igvBrowser && igvBrowser.trackViews) {
-                    const trackName = sessionData.tracks[index].name;
-                    for (let i = 0; i < igvBrowser.trackViews.length; i++) {
-                        const tv = igvBrowser.trackViews[i]; if (tv.track && tv.track.name === trackName) { tv.track.autoscaleGroup = groupName || undefined; break; }
-                    }
-                }
             });
-            if (igvBrowser) igvBrowser.updateViews();
+            if (groupName && igvBrowser) await applyGroupYRangeToIGV(groupName);
+            for (const g of oldGroups) { if (g !== groupName && igvBrowser) await applyGroupYRangeToIGV(g); }
             clearSelection(); renderGroupList(); updateGroupCountDisplay();
         }
 
@@ -1419,12 +1427,16 @@
             if (tracksInGroup > 0 && !confirm(`"${groupName}" has ${tracksInGroup} track(s) assigned. Remove the group and set those tracks to independent scaling?`)) return;
             const index = sessionData.autoscaleGroups.indexOf(groupName);
             if (index > -1) sessionData.autoscaleGroups.splice(index, 1);
+            delete sessionData.autoscaleGroupSettings[groupName];
             sessionData.tracks.forEach((track) => {
                 if (track.autoscaleGroup === groupName) {
                     track.autoscaleGroup = null;
                     if (igvBrowser && igvBrowser.trackViews) {
                         for (let j = 0; j < igvBrowser.trackViews.length; j++) {
-                            const tv = igvBrowser.trackViews[j]; if (tv.track && tv.track.name === track.name) { tv.track.autoscaleGroup = undefined; break; }
+                            const tv = igvBrowser.trackViews[j]; if (tv.track && tv.track.name === track.name) {
+                                tv.track.autoscaleGroup = undefined; tv.track.autoscale = true; tv.track.min = 0; delete tv.track.max;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1438,12 +1450,19 @@
             if (sessionData.autoscaleGroups.includes(newName)) { alert(`A group named "${newName}" already exists.`); renderGroupList(); return; }
             const index = sessionData.autoscaleGroups.indexOf(oldName);
             if (index > -1) sessionData.autoscaleGroups[index] = newName;
+            if (sessionData.autoscaleGroupSettings[oldName]) {
+                sessionData.autoscaleGroupSettings[newName] = sessionData.autoscaleGroupSettings[oldName];
+                delete sessionData.autoscaleGroupSettings[oldName];
+            }
             sessionData.tracks.forEach((track) => {
                 if (track.autoscaleGroup === oldName) {
                     track.autoscaleGroup = newName;
                     if (igvBrowser && igvBrowser.trackViews) {
                         for (let j = 0; j < igvBrowser.trackViews.length; j++) {
-                            const tv = igvBrowser.trackViews[j]; if (tv.track && tv.track.name === track.name) { tv.track.autoscaleGroup = newName; break; }
+                            const tv = igvBrowser.trackViews[j]; if (tv.track && tv.track.name === track.name) {
+                                tv.track.autoscaleGroup = newName;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1460,8 +1479,15 @@
             }
             sessionData.autoscaleGroups.forEach((group) => {
                 const trackCount = sessionData.tracks.filter(t => t.autoscaleGroup === group).length;
+                const gs = sessionData.autoscaleGroupSettings[group];
+                const hasManual = gs && (gs.yMin != null || gs.yMax != null);
+
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'background: white; border: 1px solid #d0d0d0; border-radius: 4px; margin-bottom: 6px; overflow: hidden;';
+
+                // Row 1: name, count, remove
                 const groupDiv = document.createElement('div');
-                groupDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; margin-bottom: 6px;';
+                groupDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px;';
                 const nameInput = document.createElement('input');
                 nameInput.type = 'text'; nameInput.value = group;
                 nameInput.style.cssText = 'flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;';
@@ -1475,15 +1501,121 @@
                 removeBtn.title = 'Remove group';
                 removeBtn.addEventListener('click', () => removeGroup(group));
                 groupDiv.appendChild(nameInput); groupDiv.appendChild(countSpan); groupDiv.appendChild(removeBtn);
-                groupList.appendChild(groupDiv);
+                wrapper.appendChild(groupDiv);
+
+                // Row 2: Y-range controls
+                const yRangeDiv = document.createElement('div');
+                yRangeDiv.id = 'yrange-' + group;
+                yRangeDiv.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 4px 8px 6px; border-top: 1px solid #e8e8e8; background: #fafafa;';
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.checked = !!hasManual; cb.id = 'yrcb-' + group;
+                cb.style.cssText = 'margin: 0;';
+                cb.addEventListener('change', () => toggleGroupYRange(group, cb.checked));
+
+                const cbLabel = document.createElement('label');
+                cbLabel.htmlFor = 'yrcb-' + group;
+                cbLabel.textContent = 'Manual Y-range';
+                cbLabel.style.cssText = 'font-size: 11px; color: #555; cursor: pointer; user-select: none;';
+
+                const minLabel = document.createElement('span');
+                minLabel.textContent = 'Min:'; minLabel.style.cssText = 'font-size: 11px; color: #666; margin-left: 4px;';
+                const minInput = document.createElement('input');
+                minInput.type = 'number'; minInput.step = 'any'; minInput.placeholder = 'auto';
+                minInput.className = 'yrange-min';
+                minInput.value = gs && gs.yMin != null ? gs.yMin : '';
+                minInput.disabled = !hasManual;
+                minInput.style.cssText = 'width: 60px; border: 1px solid #d0d0d0; padding: 2px 4px; border-radius: 3px; font-size: 11px; text-align: center;';
+
+                const maxLabel = document.createElement('span');
+                maxLabel.textContent = 'Max:'; maxLabel.style.cssText = 'font-size: 11px; color: #666;';
+                const maxInput = document.createElement('input');
+                maxInput.type = 'number'; maxInput.step = 'any'; maxInput.placeholder = 'auto';
+                maxInput.className = 'yrange-max';
+                maxInput.value = gs && gs.yMax != null ? gs.yMax : '';
+                maxInput.disabled = !hasManual;
+                maxInput.style.cssText = 'width: 60px; border: 1px solid #d0d0d0; padding: 2px 4px; border-radius: 3px; font-size: 11px; text-align: center;';
+
+                const applyBtn = document.createElement('button');
+                applyBtn.textContent = 'Apply'; applyBtn.className = 'secondary';
+                applyBtn.disabled = !hasManual;
+                applyBtn.style.cssText = 'padding: 2px 8px; font-size: 10px;';
+                applyBtn.addEventListener('click', () => updateGroupYRange(group));
+
+                yRangeDiv.appendChild(cb); yRangeDiv.appendChild(cbLabel);
+                yRangeDiv.appendChild(minLabel); yRangeDiv.appendChild(minInput);
+                yRangeDiv.appendChild(maxLabel); yRangeDiv.appendChild(maxInput);
+                yRangeDiv.appendChild(applyBtn);
+                wrapper.appendChild(yRangeDiv);
+
+                groupList.appendChild(wrapper);
             });
         }
 
         function updateGroupCountDisplay() { const display = document.getElementById('groupCountDisplay'); if (display) display.textContent = sessionData.autoscaleGroups.length; }
 
+        async function applyGroupYRangeToIGV(groupName) {
+            const settings = sessionData.autoscaleGroupSettings[groupName];
+            const manualMin = settings && settings.yMin != null ? settings.yMin : null;
+            const manualMax = settings && settings.yMax != null ? settings.yMax : null;
+            const useManual = manualMin != null || manualMax != null;
+            if (!igvBrowser) return;
+            const tracksInGroup = sessionData.tracks.filter(t =>
+                t.autoscaleGroup === groupName && (t.format || '').toLowerCase() !== 'bed'
+            );
+            for (const track of tracksInGroup) {
+                const source = getTrackSource(track);
+                if (!source) continue;
+                if (igvBrowser.trackViews) {
+                    for (const tv of igvBrowser.trackViews.slice()) {
+                        if (tv.track && tv.track.name === track.name) {
+                            igvBrowser.removeTrack(tv.track);
+                            break;
+                        }
+                    }
+                }
+                const igvConfig = buildIgvTrackConfig(track, source);
+                await igvBrowser.loadTrack(igvConfig);
+            }
+            syncIGVTrackOrder();
+        }
+
+        async function updateGroupYRange(groupName) {
+            const wrapper = document.getElementById('yrange-' + groupName);
+            if (!wrapper) return;
+            const minInput = wrapper.querySelector('.yrange-min');
+            const maxInput = wrapper.querySelector('.yrange-max');
+            const yMin = minInput.value.trim() !== '' ? parseFloat(minInput.value) : null;
+            const yMax = maxInput.value.trim() !== '' ? parseFloat(maxInput.value) : null;
+            if (yMin != null && isNaN(yMin)) { alert('Min must be a number'); return; }
+            if (yMax != null && isNaN(yMax)) { alert('Max must be a number'); return; }
+            if (yMin != null && yMax != null && yMin >= yMax) { alert('Min must be less than max'); return; }
+            if (yMin == null && yMax == null) {
+                delete sessionData.autoscaleGroupSettings[groupName];
+            } else {
+                sessionData.autoscaleGroupSettings[groupName] = { yMin, yMax };
+            }
+            await applyGroupYRangeToIGV(groupName);
+            renderGroupList();
+        }
+
+        async function toggleGroupYRange(groupName, checked) {
+            const wrapper = document.getElementById('yrange-' + groupName);
+            if (!checked) {
+                delete sessionData.autoscaleGroupSettings[groupName];
+                await applyGroupYRangeToIGV(groupName);
+                renderGroupList();
+            } else {
+                if (wrapper) {
+                    wrapper.querySelectorAll('input[type="number"]').forEach(i => i.disabled = false);
+                    wrapper.querySelector('button').disabled = false;
+                }
+            }
+        }
+
         function saveSessionConfig() {
             const config = {
-                genome: sessionData.genome, region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus, autoscaleGroups: sessionData.autoscaleGroups,
+                genome: sessionData.genome, region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus, autoscaleGroups: sessionData.autoscaleGroups, autoscaleGroupSettings: sessionData.autoscaleGroupSettings,
                 tracks: sessionData.tracks.map(t => ({ name: t.name, file: t.file, color: t.color, type: t.type || 'wig', format: t.format || 'bigwig', autoscaleGroup: t.autoscaleGroup || null, height: t.height || null }))
             };
             const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
@@ -1507,7 +1639,7 @@
             if (confirm('Are you sure? This will close the current browser session.')) {
                 revokeAllObjectURLs();
                 if (igvBrowser) { igvBrowser.removeAllTracks(); igvBrowser = null; }
-                sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: ['Group 1'], referenceFiles: null };
+                sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: ['Group 1'], autoscaleGroupSettings: {}, referenceFiles: null };
                 selectedTracks.clear(); lastClickedIndex = null;
                 document.getElementById('genomeSelect').value = ''; document.getElementById('startLocation').value = ''; document.getElementById('bigWigInput').value = '';
                 document.getElementById('uploadStatus').innerHTML = ''; document.getElementById('manualStatus').innerHTML = ''; document.getElementById('fileList').classList.add('hidden');
