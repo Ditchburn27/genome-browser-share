@@ -298,7 +298,7 @@
                     </div>
 
                     <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.json,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3" style="display: none;">
+                    <input type="file" id="filesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.bedpe,.json,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3" style="display: none;">
                     
                     <div class="button-group" style="margin-top: 15px;">
                         <button onclick="document.getElementById('folderInput').click()" class="secondary">
@@ -360,9 +360,9 @@
 
                     <div class="form-group">
                         <label>Track Files *</label>
-                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3">
+                        <input type="file" id="bigWigInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.bedpe,.fa,.fasta,.fna,.fai,.gtf,.gff,.gff3">
                         <p style="font-size: 11px; color: #666; margin-top: 4px;">
-                            Select one or more BigWig files (.bw, .bigWig) or BED files (.bed)
+                            Select one or more BigWig files (.bw, .bigWig), BED files (.bed), or BEDPE loop files (.bedpe)
                         </p>
                     </div>
 
@@ -410,7 +410,7 @@
             <div style="flex: 1;"></div>
             <button onclick="openAddTracksPicker()" class="secondary" title="Add more BigWig or BED tracks to this session">➕ Add Tracks</button>
             <button onclick="document.getElementById('addTracksFolderInput').click()" class="secondary" title="Add every track file inside a folder">📁 Add Folder</button>
-            <input type="file" id="addTracksFilesInput" multiple accept=".bw,.bigwig,.bigWig,.bed" style="display:none;" onchange="handleAddTracksFilesSelect(event)">
+            <input type="file" id="addTracksFilesInput" multiple accept=".bw,.bigwig,.bigWig,.bed,.bedpe" style="display:none;" onchange="handleAddTracksFilesSelect(event)">
             <input type="file" id="addTracksFolderInput" webkitdirectory directory multiple style="display:none;" onchange="handleAddTracksFolderSelect(event)">
             <button onclick="document.getElementById('csvImportInput').click()" class="secondary" title="Import track settings from a CSV file">📋 Import CSV</button>
             <input type="file" id="csvImportInput" accept=".csv,.txt" style="display:none;" onchange="handleCSVImportSelect(event)">
@@ -718,17 +718,18 @@
         }
 
         function buildIgvTrackConfig(track, source) {
-            const isBed = (track.format || '').toLowerCase() === 'bed' || /\.bed(?:$|\?)/i.test(track.file || track.url || '');
+            const isBedpe = (track.format || '').toLowerCase() === 'bedpe' || /\.bedpe(?:$|\?)/i.test(track.file || track.url || '');
+            const isBed = !isBedpe && ((track.format || '').toLowerCase() === 'bed' || /\.bed(?:$|\?)/i.test(track.file || track.url || ''));
             const igvTrack = {
                 name: track.name,
-                type: isBed ? 'annotation' : (track.type || 'wig'),
-                format: isBed ? 'bed' : (track.format || 'bigwig'),
+                type: isBedpe ? 'interaction' : (isBed ? 'annotation' : (track.type || 'wig')),
+                format: isBedpe ? 'bedpe' : (isBed ? 'bed' : (track.format || 'bigwig')),
                 url: source.kind === 'remote' ? source.url : mkObjectURL(source.file),
                 color: track.color,
-                height: track.height || 50
+                height: track.height || (isBedpe ? 200 : 50)
             };
             if (isBed) igvTrack.displayMode = 'COLLAPSED';
-            else {
+            else if (!isBedpe) {
                 const gs = track.autoscaleGroup && sessionData.autoscaleGroupSettings[track.autoscaleGroup];
                 if (gs && (gs.yMin != null || gs.yMax != null)) {
                     igvTrack.autoscale = false;
@@ -913,11 +914,12 @@
             fileListDiv.classList.add('hidden');
             
             try {
-                let configFile = null, mlConfigFile = null; const bigWigFiles = [], bedFiles = [], refFiles = [];
+                let configFile = null, mlConfigFile = null; const bigWigFiles = [], bedFiles = [], bedpeFiles = [], refFiles = [];
                 for (const file of files) {
                     if (file.name === 'config.json') configFile = file;
                     else if (file.name === 'ml_config.json') mlConfigFile = file;
                     else if (file.name.match(/\.(bw|bigwig|bigWig)$/i)) bigWigFiles.push(file);
+                    else if (file.name.match(/\.bedpe$/i)) bedpeFiles.push(file);
                     else if (file.name.match(/\.bed$/i)) bedFiles.push(file);
                     else if (file.name.match(/\.(fa|fasta|fna|fai|gzi)(\.gz)?$/i) || file.name.match(/\.(gtf|gff|gff3)(\.gz)?$/i)) refFiles.push(file);
                 }
@@ -932,6 +934,7 @@
                 if (mlConfigFile) fileListDiv.innerHTML += '<div class="file-item">ml_config.json</div>';
                 bigWigFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
                 bedFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
+                bedpeFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">${escHtml(f.name)}</div>`);
                 refFiles.forEach(f => fileListDiv.innerHTML += `<div class="file-item">📎 ${escHtml(f.name)}</div>`);
 
                 sessionData.bigWigFiles = {};
@@ -940,6 +943,10 @@
                     if (file.webkitRelativePath) sessionData.bigWigFiles[file.webkitRelativePath] = file;
                 }
                 for (const file of bedFiles) {
+                    sessionData.bigWigFiles[file.name] = file;
+                    if (file.webkitRelativePath) sessionData.bigWigFiles[file.webkitRelativePath] = file;
+                }
+                for (const file of bedpeFiles) {
                     sessionData.bigWigFiles[file.name] = file;
                     if (file.webkitRelativePath) sessionData.bigWigFiles[file.webkitRelativePath] = file;
                 }
@@ -954,15 +961,15 @@
                     sessionData.autoscaleGroups = config.autoscaleGroups || [];
                     sessionData.autoscaleGroupSettings = config.autoscaleGroupSettings || {};
                     if (config.tracks) sessionData.tracks = config.tracks.map(normalizeTrackConfig);
-                    else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
+                    else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles, ...bedpeFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded!</div>';
                 } else {
-                    if (bigWigFiles.length === 0 && bedFiles.length === 0) {
-                        statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload config.json, .bw/.bigWig, or .bed files.</div>'; return;
+                    if (bigWigFiles.length === 0 && bedFiles.length === 0 && bedpeFiles.length === 0) {
+                        statusDiv.innerHTML = '<div class="status-message status-error">❌ No track files found. Please upload config.json, .bw/.bigWig, .bed, or .bedpe files.</div>'; return;
                     }
                     if (parsedRef) sessionData.genome = 'custom:' + parsedRef.fasta.name.replace(/\.(fa|fasta|fna)$/i, '');
                     else sessionData.genome = 'hg38';
-                    sessionData.autoscaleGroups = []; sessionData.autoscaleGroupSettings = {}; sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles]);
+                    sessionData.autoscaleGroups = []; sessionData.autoscaleGroupSettings = {}; sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles, ...bedpeFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Files loaded!</div>';
                 }
 
@@ -974,7 +981,7 @@
 
                 if (resolvableTracks.length === 0) {
                     const missing = missingTracks.slice(0, 5).map(t => escHtml(t.file || t.url || t.name)).join('<br>');
-                    statusDiv.innerHTML = `<div class="status-message status-error">❌ No loadable tracks found. Add local .bw/.bed files or use http(s) URLs in config.json.${missing ? '<br><br>Missing:<br>' + missing : ''}</div>`;
+                    statusDiv.innerHTML = `<div class="status-message status-error">❌ No loadable tracks found. Add local .bw/.bed/.bedpe files or use http(s) URLs in config.json.${missing ? '<br><br>Missing:<br>' + missing : ''}</div>`;
                     return;
                 }
                 if (missingTracks.length > 0) console.warn('Tracks skipped because their files were not found locally and are not remote URLs:', missingTracks);
@@ -995,9 +1002,11 @@
             const bedColors = ['#5566AA', '#AA6655', '#55AA66', '#9955AA', '#AA9955', '#559999'];
             let wigCount = 0, bedCount = 0;
             return files.map(file => {
-                const isBed = /\.bed$/i.test(file.name);
-                return isBed ? { name: file.name.replace(/\.bed$/i, ''), file: file.name, color: bedColors[bedCount++ % bedColors.length], type: 'annotation', format: 'bed', autoscaleGroup: null }
-                             : { name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''), file: file.name, color: wigColors[wigCount++ % wigColors.length], type: 'wig', format: 'bigwig', autoscaleGroup: null };
+                const isBedpe = /\.bedpe$/i.test(file.name);
+                const isBed = !isBedpe && /\.bed$/i.test(file.name);
+                if (isBedpe) return { name: file.name.replace(/\.bedpe$/i, ''), file: file.name, color: '#CC00CC', type: 'interaction', format: 'bedpe', autoscaleGroup: null, height: 200 };
+                if (isBed)   return { name: file.name.replace(/\.bed$/i, ''), file: file.name, color: bedColors[bedCount++ % bedColors.length], type: 'annotation', format: 'bed', autoscaleGroup: null, height: null };
+                return { name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''), file: file.name, color: wigColors[wigCount++ % wigColors.length], type: 'wig', format: 'bigwig', autoscaleGroup: null, height: null };
             });
         }
 
@@ -1008,15 +1017,18 @@
         function nextTrackColors(existingTracks, newFiles) {
             const wigColors = ['#FF0000', '#00AA00', '#0000FF', '#FF8800', '#8800FF', '#00CCCC'];
             const bedColors = ['#5566AA', '#AA6655', '#55AA66', '#9955AA', '#AA9955', '#559999'];
-            let wigCount = existingTracks.filter(t => t.format !== 'bed').length;
+            let wigCount = existingTracks.filter(t => t.format === 'bigwig').length;
             let bedCount = existingTracks.filter(t => t.format === 'bed').length;
-            return newFiles.map(file => /\.bed$/i.test(file.name) ? bedColors[bedCount++ % bedColors.length] : wigColors[wigCount++ % wigColors.length]);
+            return newFiles.map(file => {
+                if (/\.bedpe$/i.test(file.name)) return '#CC00CC';
+                return /\.bed$/i.test(file.name) ? bedColors[bedCount++ % bedColors.length] : wigColors[wigCount++ % wigColors.length];
+            });
         }
 
         async function addTracksFromFiles(files) {
             if (!igvBrowser) { alert('Browser is not ready yet.'); return; }
-            const trackFiles = files.filter(f => /\.(bw|bigwig|bigWig)$/i.test(f.name) || /\.bed$/i.test(f.name));
-            if (trackFiles.length === 0) { alert('No BigWig or BED files found in the selection.'); return; }
+            const trackFiles = files.filter(f => /\.(bw|bigwig|bigWig)$/i.test(f.name) || /\.bed$/i.test(f.name) || /\.bedpe$/i.test(f.name));
+            if (trackFiles.length === 0) { alert('No BigWig, BED, or BEDPE files found in the selection.'); return; }
 
             const existingFileNames = new Set((sessionData.tracks || []).map(t => t.file));
             const colors = nextTrackColors(sessionData.tracks || [], trackFiles);
@@ -1025,20 +1037,23 @@
             for (let i = 0; i < trackFiles.length; i++) {
                 const file = trackFiles[i];
                 if (existingFileNames.has(file.name)) continue;
-                const isBed = /\.bed$/i.test(file.name);
-                const displayName = isBed ? file.name.replace(/\.bed$/i, '') : file.name.replace(/\.(bw|bigwig|bigWig)$/i, '');
-                
+                const isBedpe = /\.bedpe$/i.test(file.name);
+                const isBed = !isBedpe && /\.bed$/i.test(file.name);
+                const displayName = isBedpe ? file.name.replace(/\.bedpe$/i, '')
+                                 : isBed    ? file.name.replace(/\.bed$/i, '')
+                                            : file.name.replace(/\.(bw|bigwig|bigWig)$/i, '');
+
                 let finalName = displayName, suffix = 2;
                 const usedNames = new Set(sessionData.tracks.map(t => t.name));
                 while (usedNames.has(finalName)) finalName = `${displayName} (${suffix++})`;
 
-                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBed ? 'annotation' : 'wig', format: isBed ? 'bed' : 'bigwig', autoscaleGroup: null, height: null };
+                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBedpe ? 'interaction' : (isBed ? 'annotation' : 'wig'), format: isBedpe ? 'bedpe' : (isBed ? 'bed' : 'bigwig'), autoscaleGroup: null, height: isBedpe ? 200 : null };
                 sessionData.bigWigFiles[file.name] = file;
                 sessionData.tracks.push(trackEntry);
                 existingFileNames.add(file.name);
 
                 const igvTrackCfg = { name: finalName, type: trackEntry.type, format: trackEntry.format, url: mkObjectURL(file), color: trackEntry.color, height: trackEntry.height || 50 };
-                if (isBed) igvTrackCfg.displayMode = 'COLLAPSED'; else { igvTrackCfg.autoscale = true; igvTrackCfg.min = 0; }
+                if (isBed) igvTrackCfg.displayMode = 'COLLAPSED'; else if (!isBedpe) { igvTrackCfg.autoscale = true; igvTrackCfg.min = 0; }
 
                 try {
                     await igvBrowser.loadTrack(igvTrackCfg);
@@ -2573,7 +2588,7 @@
             }
 
             const binGrid = [];
-            await Promise.all(visibleTracks.map(async (track, ti) => { binGrid[ti] = []; await Promise.all(loci.map(async (locus, li) => { if (!track.file || /\.bed$/i.test(track.file.name)) { binGrid[ti][li] = null; return; } try { binGrid[ti][li] = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { binGrid[ti][li] = null; } })); }));
+            await Promise.all(visibleTracks.map(async (track, ti) => { binGrid[ti] = []; await Promise.all(loci.map(async (locus, li) => { if (!track.file || /\.bed$/i.test(track.file.name) || /\.bedpe$/i.test(track.file.name)) { binGrid[ti][li] = null; return; } try { binGrid[ti][li] = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { binGrid[ti][li] = null; } })); }));
 
             const mode = mlState.yscale, ymaxGrid = visibleTracks.map((_, ti) => loci.map((_, li) => { const b = binGrid[ti][li]; return (b && b.some(v => v > 0)) ? Math.max(...b) : 1; }));
             if (mode === 'row') visibleTracks.forEach((_, ti) => { const rowMax = Math.max(...loci.map((_, li) => ymaxGrid[ti][li])); loci.forEach((_, li) => { ymaxGrid[ti][li] = rowMax; }); });
@@ -2611,10 +2626,34 @@
             } catch(e) { ctx.fillStyle = '#bbb'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('BED read error', W/2, H/2 + 4); }
         }
 
+        async function mlPaintBedpeTrack(ctx, file, locus, W, H, color) {
+            ctx.fillStyle = mlState.showTrackBg ? '#fafafa' : '#ffffff'; ctx.fillRect(0, 0, W, H);
+            try {
+                const text = await file.text(), lines = text.split('\n'), rangeSize = locus.end - locus.start;
+                const hex = color.replace('#',''), r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+                ctx.strokeStyle = `rgba(${r},${g},${b},0.8)`; ctx.lineWidth = 1.5;
+                for (const line of lines) {
+                    if (line.startsWith('#') || line.startsWith('track') || line.startsWith('browser') || !line.trim()) continue;
+                    const cols = line.split('\t'); if (cols.length < 6) continue;
+                    const chr1 = cols[0], start1 = parseInt(cols[1]), end1 = parseInt(cols[2]);
+                    const chr2 = cols[3], start2 = parseInt(cols[4]), end2 = parseInt(cols[5]);
+                    if (chr1 !== locus.chr || chr2 !== locus.chr) continue;
+                    const mid1 = (start1 + end1) / 2, mid2 = (start2 + end2) / 2;
+                    const leftMid = Math.min(mid1, mid2), rightMid = Math.max(mid1, mid2);
+                    if (rightMid < locus.start || leftMid > locus.end) continue;
+                    const x1 = ((leftMid - locus.start) / rangeSize) * W;
+                    const x2 = ((rightMid - locus.start) / rangeSize) * W;
+                    const arcH = Math.min(H - 4, Math.max(8, ((x2 - x1) / W) * H));
+                    ctx.beginPath(); ctx.moveTo(x1, H); ctx.quadraticCurveTo((x1+x2)/2, H - arcH, x2, H); ctx.stroke();
+                }
+            } catch(e) { ctx.fillStyle = '#bbb'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('BEDPE read error', W/2, H/2 + 4); }
+        }
+
         async function mlPaintTrack(canvas, ti, li, visibleTracks, loci, preloadedBins, preloadedYmax) {
             const track = visibleTracks[ti], locus = loci[li], W = canvas.offsetWidth || canvas.parentElement && canvas.parentElement.offsetWidth || 400, H = canvas.height; canvas.width = W;
             const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, W, H); ctx.fillStyle = mlState.showTrackBg ? '#fafafa' : '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#ddd'; ctx.fillRect(0, H-2, W, 2);
             if (track.file && /\.bed$/i.test(track.file.name)) { await mlPaintBedTrack(ctx, track.file, locus, W, H, track.color); return; }
+            if (track.file && /\.bedpe$/i.test(track.file.name)) { await mlPaintBedpeTrack(ctx, track.file, locus, W, H, track.color); return; }
 
             let bins = preloadedBins !== undefined ? preloadedBins : null, readError = null;
             if (bins === null) { if (track.file) try { bins = await readBigWigLocus(track.file, locus.chr, locus.start, locus.end, mlState.nBins); } catch(e) { readError = e; } }
