@@ -78,6 +78,11 @@
         .drag-handle:hover { color: #555; }
         .track-item.dragging { opacity: 0.4; }
         .track-item.drag-over { border-top: 2px solid #4a90e2; margin-top: -1px; }
+        .track-hex-input { text-transform: uppercase; }
+        .track-hex-input.invalid { border-color: #e25c5c !important; background: #fff5f5 !important; }
+        .track-vis-toggle { font-size: 14px; cursor: pointer; padding: 0 3px; user-select: none; }
+        .track-vis-toggle:hover { color: #4a90e2; }
+        .track-item.track-hidden { opacity: 0.45; background: #f5f5f5; }
         .ml-locus-item.dragging { opacity: 0.4; }
         .ml-locus-item.drag-over { border-top: 2px solid #4a90e2; margin-top: -1px; }
 
@@ -390,7 +395,7 @@
 
         <div class="controls-bar">
             <span style="font-size: 12px; color: #666;">Genome: <strong id="genomeDisplay">-</strong></span>
-            <span style="font-size: 12px; color: #666; margin-left: 15px;">
+            <span style="font-size: 12px; color: #666;">
                 Track Height:
                 <select id="trackHeightSelect" onchange="onTrackHeightSelectChange(this.value)" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
                     <option value="40">Compact (40px)</option>
@@ -404,7 +409,23 @@
                     style="display:none;width:55px;padding:3px 6px;font-size:12px;border:1px solid #d0d0d0;border-radius:3px;margin-left:4px;"
                     onchange="updateAllTrackHeights(+this.value)">
             </span>
-            <span style="font-size: 12px; color: #666; margin-left: 15px;">
+            <span id="geneAnnotationControls" style="font-size: 12px; color: #666; display: none; align-items: center; gap: 6px;">
+                Gene Track:
+                <select id="genePositionSelect" onchange="onGenePositionChange(this.value)" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d0d0; border-radius: 3px;">
+                    <option value="first">First</option>
+                    <option value="last" selected>Last</option>
+                    <option value="custom">Custom...</option>
+                </select>
+                <input type="number" id="geneCustomPositionInput" min="1" placeholder="#"
+                    style="display:none;width:45px;padding:3px 6px;font-size:12px;border:1px solid #d0d0d0;border-radius:3px;"
+                    onchange="onGeneCustomPositionChange(+this.value)">
+                Height:
+                <input type="number" id="geneHeightInput" min="20" max="400" value="100"
+                    style="width:55px;padding:3px 6px;font-size:12px;border:1px solid #d0d0d0;border-radius:3px;"
+                    onchange="onGeneHeightChange(+this.value)">
+                <span style="font-size:10px;color:#999;">px</span>
+            </span>
+            <span style="font-size: 12px; color: #666;">
                 Autoscale Groups: <strong id="groupCountDisplay">1</strong>
             </span>
             <div style="flex: 1;"></div>
@@ -687,7 +708,7 @@
 
     <script>
         let igvBrowser = null;
-        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], autoscaleGroupSettings: {}, referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false };
+        let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], autoscaleGroupSettings: {}, referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false, geneAnnotation: { position: 'last', height: 100 } };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
         let dragSourceIndex = null;
@@ -707,7 +728,7 @@
 
         function normalizeTrackConfig(track) {
             const source = track.file || track.url || '';
-            return { ...track, file: source, autoscaleGroup: track.autoscaleGroup !== undefined ? track.autoscaleGroup : null, height: track.height || null };
+            return { ...track, file: source, autoscaleGroup: track.autoscaleGroup !== undefined ? track.autoscaleGroup : null, height: track.height || null, visible: track.visible !== undefined ? track.visible : true };
         }
 
         function getTrackSource(track) {
@@ -769,11 +790,11 @@
             if (sessionData.referenceFiles) {
                 reference.fastaURL = mkObjectURL(sessionData.referenceFiles.fasta);
                 if (sessionData.referenceFiles.index) reference.indexURL = mkObjectURL(sessionData.referenceFiles.index);
-                if (sessionData.referenceFiles.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: sessionData.referenceFiles.annotationFormat || 'gtf', url: mkObjectURL(sessionData.referenceFiles.annotation), displayMode: 'COLLAPSED', height: 100 };
+                if (sessionData.referenceFiles.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: sessionData.referenceFiles.annotationFormat || 'gtf', url: mkObjectURL(sessionData.referenceFiles.annotation), displayMode: 'COLLAPSED', height: (sessionData.geneAnnotation && sessionData.geneAnnotation.height) || 100 };
             } else if (genome) {
                 reference.fastaURL = genome.fasta;
                 if (genome.index) reference.indexURL = genome.index;
-                if (genome.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: genome.annotationFormat || 'gtf', url: genome.annotation, displayMode: 'COLLAPSED', height: 100 };
+                if (genome.annotation) annotationTrack = { name: 'Gene Annotations', type: 'annotation', format: genome.annotationFormat || 'gtf', url: genome.annotation, displayMode: 'COLLAPSED', height: (sessionData.geneAnnotation && sessionData.geneAnnotation.height) || 100 };
             } else throw { code: 'NEEDS_FILE_PICKER', genomeId: id };
             return { reference, annotationTrack };
         }
@@ -960,6 +981,7 @@
                     sessionData.genome = config.genome || 'hg38'; sessionData.locus = config.region || null;
                     sessionData.autoscaleGroups = config.autoscaleGroups || [];
                     sessionData.autoscaleGroupSettings = config.autoscaleGroupSettings || {};
+                    sessionData.geneAnnotation = config.geneAnnotation || { position: 'last', height: 100 };
                     if (config.tracks) sessionData.tracks = config.tracks.map(normalizeTrackConfig);
                     else sessionData.tracks = createDefaultTracks([...bigWigFiles, ...bedFiles, ...bedpeFiles]);
                     statusDiv.innerHTML = '<div class="status-message status-success">✅ Session loaded!</div>';
@@ -1004,9 +1026,9 @@
             return files.map(file => {
                 const isBedpe = /\.bedpe$/i.test(file.name);
                 const isBed = !isBedpe && /\.bed$/i.test(file.name);
-                if (isBedpe) return { name: file.name.replace(/\.bedpe$/i, ''), file: file.name, color: '#CC00CC', type: 'interaction', format: 'bedpe', autoscaleGroup: null, height: 200 };
-                if (isBed)   return { name: file.name.replace(/\.bed$/i, ''), file: file.name, color: bedColors[bedCount++ % bedColors.length], type: 'annotation', format: 'bed', autoscaleGroup: null, height: null };
-                return { name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''), file: file.name, color: wigColors[wigCount++ % wigColors.length], type: 'wig', format: 'bigwig', autoscaleGroup: null, height: null };
+                if (isBedpe) return { name: file.name.replace(/\.bedpe$/i, ''), file: file.name, color: '#CC00CC', type: 'interaction', format: 'bedpe', autoscaleGroup: null, height: 200, visible: true };
+                if (isBed)   return { name: file.name.replace(/\.bed$/i, ''), file: file.name, color: bedColors[bedCount++ % bedColors.length], type: 'annotation', format: 'bed', autoscaleGroup: null, height: null, visible: true };
+                return { name: file.name.replace(/\.(bw|bigwig|bigWig)$/i, ''), file: file.name, color: wigColors[wigCount++ % wigColors.length], type: 'wig', format: 'bigwig', autoscaleGroup: null, height: null, visible: true };
             });
         }
 
@@ -1047,7 +1069,7 @@
                 const usedNames = new Set(sessionData.tracks.map(t => t.name));
                 while (usedNames.has(finalName)) finalName = `${displayName} (${suffix++})`;
 
-                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBedpe ? 'interaction' : (isBed ? 'annotation' : 'wig'), format: isBedpe ? 'bedpe' : (isBed ? 'bed' : 'bigwig'), autoscaleGroup: null, height: isBedpe ? 200 : null };
+                const trackEntry = { name: finalName, file: file.name, color: colors[i], type: isBedpe ? 'interaction' : (isBed ? 'annotation' : 'wig'), format: isBedpe ? 'bedpe' : (isBed ? 'bed' : 'bigwig'), autoscaleGroup: null, height: isBedpe ? 200 : null, visible: true };
                 sessionData.bigWigFiles[file.name] = file;
                 sessionData.tracks.push(trackEntry);
                 existingFileNames.add(file.name);
@@ -1274,7 +1296,11 @@
                     igvMouseDown = null;
                 });
                 igvEl.addEventListener('wheel', function() { setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }, 0); }, { passive: true });
-                renderTrackControls(); renderGroupList(); updateGroupCountDisplay();
+                renderTrackControls(); renderGroupList(); updateGroupCountDisplay(); reapplyTrackVisibility();
+                setTimeout(() => {
+                    showGeneAnnotationControls();
+                    if (sessionData.geneAnnotation) { applyGeneAnnotationPosition(); const geneTv = findGeneAnnotationTrackView(); if (geneTv && sessionData.geneAnnotation.height) geneTv.setTrackHeight(sessionData.geneAnnotation.height); }
+                }, 200);
             } catch (error) {
                 alert('Error loading browser: ' + (error && (error.message || error.toString()) || 'unknown error'));
             }
@@ -1284,14 +1310,16 @@
             const trackList = document.getElementById('trackList'); trackList.innerHTML = '';
             sessionData.tracks.forEach((track, index) => {
                 const trackDiv = document.createElement('div');
-                trackDiv.className = 'track-item' + (selectedTracks.has(index) ? ' selected' : '');
+                trackDiv.className = 'track-item' + (selectedTracks.has(index) ? ' selected' : '') + (track.visible === false ? ' track-hidden' : '');
                 trackDiv.dataset.index = index; trackDiv.draggable = false;
-                const groupBadge = track.autoscaleGroup ? `<span class="track-group-badge has-group">${track.autoscaleGroup}</span>` : `<span class="track-group-badge">Independent</span>`;
+                const groupBadge = track.autoscaleGroup ? `<span class="track-group-badge has-group">${escHtml(track.autoscaleGroup)}</span>` : `<span class="track-group-badge">Independent</span>`;
                 trackDiv.innerHTML = `
+                    <span class="track-vis-toggle" onclick="toggleTrackVisibility(${index})" title="Toggle visibility">${track.visible !== false ? '👁' : '🙈'}</span>
                     <span class="drag-handle" title="Drag to reorder">&#9776;</span>
                     <input type="checkbox" ${selectedTracks.has(index) ? 'checked' : ''} onclick="handleTrackSelect(event, ${index})" title="Select track">
                     <input type="color" id="colorPicker${index}" value="${track.color}" onchange="updateTrackColor(${index}, this.value)" title="Change color" style="width: 40px; height: 30px; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; padding: 2px;">
-                    <input type="text" id="trackName${index}" value="${track.name}" onchange="updateTrackName(${index}, this.value)" onclick="event.stopPropagation()" style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                    <input type="text" class="track-hex-input" id="hexInput${index}" value="${track.color}" onchange="handleHexInput(${index}, this.value)" onkeydown="if(event.key==='Enter')this.blur()" title="Hex color (#RRGGBB)" style="width:68px;font-family:monospace;font-size:11px;border:1px solid #d0d0d0;border-radius:3px;padding:2px 4px;">
+                    <input type="text" id="trackName${index}" value="${escHtml(track.name)}" onchange="updateTrackName(${index}, this.value)" onclick="event.stopPropagation()" style="flex: 1; border: 1px solid #d0d0d0; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
                     <input type="number" min="20" max="400" value="${track.height || 50}" title="Track height (px)" onclick="event.stopPropagation()" onchange="updateSingleTrackHeight(${index}, +this.value)" style="width:55px;border:1px solid #d0d0d0;padding:2px 4px;border-radius:3px;font-size:11px;text-align:center;">
                     <span style="font-size:10px;color:#999;">px</span>
                     ${groupBadge}
@@ -1328,7 +1356,7 @@
                 if (lastClickedIndex === fromIndex) lastClickedIndex = toIndex;
                 else { let newIdx = lastClickedIndex; if (newIdx > fromIndex) newIdx--; if (newIdx >= toIndex) newIdx++; lastClickedIndex = newIdx; }
             }
-            syncIGVTrackOrder(); renderTrackControls();
+            syncIGVTrackOrder(); reapplyTrackVisibility(); renderTrackControls();
         }
 
         function syncIGVTrackOrder() {
@@ -1337,6 +1365,7 @@
                 for (const tv of igvBrowser.trackViews) { if (tv.track && tv.track.name === track.name) { tv.track.order = 1000 + i; break; } }
             });
             igvBrowser.reorderTracks();
+            applyGeneAnnotationPosition();
         }
 
         async function updateTrackColor(index, color) {
@@ -1348,6 +1377,154 @@
                     if (tv.track && tv.track.name === trackName) { tv.track.color = color; tv.repaintViews(); break; }
                 }
             }
+            const hexInput = document.getElementById('hexInput' + index);
+            if (hexInput && hexInput !== document.activeElement) hexInput.value = color;
+            const colorPicker = document.getElementById('colorPicker' + index);
+            if (colorPicker && colorPicker !== document.activeElement) colorPicker.value = color;
+        }
+
+        function handleHexInput(index, value) {
+            let hex = value.trim();
+            if (!hex.startsWith('#')) hex = '#' + hex;
+            if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+                const hexInput = document.getElementById('hexInput' + index);
+                if (hexInput) { hexInput.value = sessionData.tracks[index].color; hexInput.classList.add('invalid'); setTimeout(() => hexInput.classList.remove('invalid'), 1500); }
+                return;
+            }
+            updateTrackColor(index, hex.toUpperCase());
+        }
+
+        function _hideTrackView(tv, hide) {
+            const d = hide ? 'none' : '';
+            if (tv.axis) tv.axis.style.display = d;
+            if (tv.viewports) tv.viewports.forEach(vp => { if (vp.$viewport) vp.$viewport.get(0).style.display = d; });
+            if (tv.dragHandle) tv.dragHandle.style.display = d;
+            if (tv.gearContainer) tv.gearContainer.style.display = d;
+            if (tv.innerScroll) tv.innerScroll.style.display = d;
+            if (tv.outerScroll) tv.outerScroll.style.display = d;
+        }
+
+        function toggleTrackVisibility(index) {
+            const track = sessionData.tracks[index];
+            track.visible = track.visible === false ? true : false;
+            if (igvBrowser && igvBrowser.trackViews) {
+                for (const tv of igvBrowser.trackViews) {
+                    if (tv.track && tv.track.name === track.name) {
+                        _hideTrackView(tv, !track.visible);
+                        break;
+                    }
+                }
+            }
+            renderTrackControls();
+        }
+
+        function reapplyTrackVisibility() {
+            if (!igvBrowser || !igvBrowser.trackViews) return;
+            sessionData.tracks.forEach(track => {
+                if (track.visible === false) {
+                    for (const tv of igvBrowser.trackViews) {
+                        if (tv.track && tv.track.name === track.name) {
+                            _hideTrackView(tv, true);
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+
+        function findGeneAnnotationTrackView() {
+            if (!igvBrowser || !igvBrowser.trackViews) return null;
+            // First check for custom genome annotation track (explicit name)
+            for (const tv of igvBrowser.trackViews) {
+                if (tv.track && tv.track.name === 'Gene Annotations') return tv;
+            }
+            // For preset genomes, find IGV's built-in gene/annotation track
+            // IGV adds these with type 'annotation' or 'gene'; skip data tracks from sessionData
+            const sessionNames = new Set(sessionData.tracks.map(t => t.name));
+            for (const tv of igvBrowser.trackViews) {
+                if (tv.track && (tv.track.type === 'annotation' || tv.track.type === 'gene') &&
+                    tv.track.id !== 'ruler' && tv.track.id !== 'ideogram' && tv.track.id !== 'sequence' &&
+                    !sessionNames.has(tv.track.name)) return tv;
+            }
+            return null;
+        }
+
+        function showGeneAnnotationControls() {
+            const controls = document.getElementById('geneAnnotationControls');
+            if (!controls) return;
+            const geneTv = findGeneAnnotationTrackView();
+            controls.style.display = geneTv ? 'inline-flex' : 'none';
+            if (geneTv) {
+                const ga = sessionData.geneAnnotation || {};
+                const posSelect = document.getElementById('genePositionSelect');
+                const customInput = document.getElementById('geneCustomPositionInput');
+                const heightInput = document.getElementById('geneHeightInput');
+                const pos = ga.position || 'last';
+                if (posSelect) {
+                    if (pos === 'first' || pos === 'last') {
+                        posSelect.value = pos;
+                        if (customInput) customInput.style.display = 'none';
+                    } else {
+                        posSelect.value = 'custom';
+                        if (customInput) { customInput.style.display = 'inline-block'; customInput.value = pos; }
+                    }
+                }
+                if (heightInput) heightInput.value = ga.height || 100;
+            }
+        }
+
+        function onGenePositionChange(value) {
+            const customInput = document.getElementById('geneCustomPositionInput');
+            if (value === 'custom') {
+                if (customInput) { customInput.style.display = 'inline-block'; customInput.focus(); }
+                return;
+            }
+            if (customInput) customInput.style.display = 'none';
+            sessionData.geneAnnotation = sessionData.geneAnnotation || {};
+            sessionData.geneAnnotation.position = value;
+            applyGeneAnnotationPosition();
+        }
+
+        function onGeneCustomPositionChange(position) {
+            const pos = Math.max(1, Math.min(sessionData.tracks.length + 1, position));
+            sessionData.geneAnnotation = sessionData.geneAnnotation || {};
+            sessionData.geneAnnotation.position = String(pos);
+            const customInput = document.getElementById('geneCustomPositionInput');
+            if (customInput) customInput.value = pos;
+            applyGeneAnnotationPosition();
+        }
+
+        function onGeneHeightChange(height) {
+            const h = Math.max(20, Math.min(400, height));
+            sessionData.geneAnnotation = sessionData.geneAnnotation || {};
+            sessionData.geneAnnotation.height = h;
+            const geneTv = findGeneAnnotationTrackView();
+            if (geneTv) geneTv.setTrackHeight(h);
+        }
+
+        function applyGeneAnnotationPosition() {
+            if (!igvBrowser || !igvBrowser.trackViews) return;
+            // Ensure data tracks have their order values set (1000+i)
+            sessionData.tracks.forEach((track, i) => {
+                for (const tv of igvBrowser.trackViews) {
+                    if (tv.track && tv.track.name === track.name) { tv.track.order = 1000 + i; break; }
+                }
+            });
+            const ga = sessionData.geneAnnotation || {};
+            const position = ga.position || 'last';
+            const geneTv = findGeneAnnotationTrackView();
+            if (!geneTv) return;
+            if (position === 'first') {
+                geneTv.track.order = 500;
+            } else if (position === 'last') {
+                const maxDataOrder = sessionData.tracks.length > 0 ? 1000 + sessionData.tracks.length - 1 : 999;
+                geneTv.track.order = maxDataOrder + 100;
+            } else {
+                const pos = Math.max(1, Math.min(sessionData.tracks.length + 1, parseInt(position) || 1));
+                geneTv.track.order = 1000 + pos - 0.5;
+            }
+            igvBrowser.reorderTracks();
+            reapplyTrackVisibility();
         }
 
         function updateTrackName(index, name) {
@@ -1376,8 +1553,11 @@
             if (!heightValue || heightValue < 20) return;
             sessionData.tracks.forEach(t => { t.height = heightValue; });
             if (igvBrowser && igvBrowser.trackViews) {
+                const geneTv = findGeneAnnotationTrackView();
                 for (let i = 1; i < igvBrowser.trackViews.length; i++) {
-                    const tv = igvBrowser.trackViews[i]; if (tv && tv.track) tv.setTrackHeight(heightValue);
+                    const tv = igvBrowser.trackViews[i];
+                    if (tv && tv === geneTv) continue;
+                    if (tv && tv.track) tv.setTrackHeight(heightValue);
                 }
             }
             renderTrackControls();
@@ -1630,8 +1810,8 @@
 
         function saveSessionConfig() {
             const config = {
-                genome: sessionData.genome, region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus, autoscaleGroups: sessionData.autoscaleGroups, autoscaleGroupSettings: sessionData.autoscaleGroupSettings,
-                tracks: sessionData.tracks.map(t => ({ name: t.name, file: t.file, color: t.color, type: t.type || 'wig', format: t.format || 'bigwig', autoscaleGroup: t.autoscaleGroup || null, height: t.height || null }))
+                genome: sessionData.genome, region: igvBrowser ? (Array.isArray(igvBrowser.currentLoci()) ? igvBrowser.currentLoci()[0] : igvBrowser.currentLoci()) : sessionData.locus, autoscaleGroups: sessionData.autoscaleGroups, autoscaleGroupSettings: sessionData.autoscaleGroupSettings, geneAnnotation: sessionData.geneAnnotation || { position: 'last', height: 100 },
+                tracks: sessionData.tracks.map(t => ({ name: t.name, file: t.file, color: t.color, type: t.type || 'wig', format: t.format || 'bigwig', autoscaleGroup: t.autoscaleGroup || null, height: t.height || null, visible: t.visible !== undefined ? t.visible : true }))
             };
             const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1654,7 +1834,7 @@
             if (confirm('Are you sure? This will close the current browser session.')) {
                 revokeAllObjectURLs();
                 if (igvBrowser) { igvBrowser.removeAllTracks(); igvBrowser = null; }
-                sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: ['Group 1'], autoscaleGroupSettings: {}, referenceFiles: null };
+                sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: ['Group 1'], autoscaleGroupSettings: {}, referenceFiles: null, geneAnnotation: { position: 'last', height: 100 } };
                 selectedTracks.clear(); lastClickedIndex = null;
                 document.getElementById('genomeSelect').value = ''; document.getElementById('startLocation').value = ''; document.getElementById('bigWigInput').value = '';
                 document.getElementById('uploadStatus').innerHTML = ''; document.getElementById('manualStatus').innerHTML = ''; document.getElementById('fileList').classList.add('hidden');
@@ -1704,6 +1884,7 @@
             document.getElementById('tabMultilocus').classList.toggle('active', name === 'multilocus');
             document.getElementById('tabBtnIgv').classList.toggle('active', name === 'igv');
             document.getElementById('tabBtnMl').classList.toggle('active', name === 'multilocus');
+            if (name === 'igv') showGeneAnnotationControls();
             if (name === 'multilocus') {
                 mlSyncTracksFromSession(); mlRenderSidebar(); mlSeedCurrentLocus();
                 if (sessionData.mlConfig && !sessionData.mlConfigApplied) { mlApplyConfig(sessionData.mlConfig); sessionData.mlConfigApplied = true; }
