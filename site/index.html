@@ -708,25 +708,6 @@
     <script>
         let igvBrowser = null;
         let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], autoscaleGroupSettings: {}, referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false, geneAnnotation: { position: 'last', height: 100 } };
-        // Override genomes whose upstream genomes.json URLs are broken (e.g. Broad S3 403).
-        // These are passed via igvOptions.genomeList to replace the broken registry entries.
-        const GENOME_OVERRIDES = {
-            mm10: {
-                id: 'mm10',
-                name: 'Mouse (GRCm38/mm10)',
-                twoBitURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.2bit',
-                cytobandURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/database/cytoBandIdeo.txt.gz',
-                chromSizesURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.chrom.sizes',
-                chromosomeOrder: 'chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chrX,chrY',
-                tracks: [{
-                    name: 'Refseq Curated',
-                    format: 'refgene',
-                    url: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/database/ncbiRefSeqCurated.txt.gz',
-                    indexed: false,
-                    order: 1000000
-                }]
-            }
-        };
         let selectedTracks = new Set();
         let lastClickedIndex = null;
         let dragSourceIndex = null;
@@ -1279,11 +1260,7 @@
                 if (isCustomGenome(sessionData.genome)) {
                     const { reference, annotationTrack } = await buildReferenceConfig(sessionData.genome);
                     igvOptions.reference = reference; customAnnotationTrack = annotationTrack;
-                } else {
-                    const gid = sessionData.genome || 'hg38';
-                    igvOptions.genome = gid;
-                    if (GENOME_OVERRIDES[gid]) igvOptions.genomeList = [GENOME_OVERRIDES[gid]];
-                }
+                } else igvOptions.genome = sessionData.genome || 'hg38';
             } catch (error) {
                 if (error && error.code === 'NEEDS_FILE_PICKER') { showReferenceFilePrompt(error.genomeId); return; }
                 alert('Error loading custom genome: ' + (error.message || error)); return;
