@@ -708,11 +708,11 @@
     <script>
         let igvBrowser = null;
         let sessionData = { genome: null, locus: null, tracks: [], bigWigFiles: {}, autoscaleGroups: [], autoscaleGroupSettings: {}, referenceFiles: null, pendingRefFiles: null, mlConfig: null, mlConfigApplied: false, geneAnnotation: { position: 'last', height: 100 } };
-        // Override genomes whose upstream genomes.json URLs are broken (e.g. Broad S3 403)
+        // Override genomes whose upstream genomes.json URLs are broken (e.g. Broad S3 403).
+        // These are passed via igvOptions.genomeList to replace the broken registry entries.
         const GENOME_OVERRIDES = {
             mm10: {
-                // No 'id' field — IGV's expandReference treats objects with id but no fastaURL
-                // as a genome ID lookup, which would pull the broken upstream genomes.json entry.
+                id: 'mm10',
                 name: 'Mouse (GRCm38/mm10)',
                 twoBitURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.2bit',
                 cytobandURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/database/cytoBandIdeo.txt.gz',
@@ -1281,8 +1281,8 @@
                     igvOptions.reference = reference; customAnnotationTrack = annotationTrack;
                 } else {
                     const gid = sessionData.genome || 'hg38';
-                    if (GENOME_OVERRIDES[gid]) igvOptions.reference = GENOME_OVERRIDES[gid];
-                    else igvOptions.genome = gid;
+                    igvOptions.genome = gid;
+                    if (GENOME_OVERRIDES[gid]) igvOptions.genomeList = [GENOME_OVERRIDES[gid]];
                 }
             } catch (error) {
                 if (error && error.code === 'NEEDS_FILE_PICKER') { showReferenceFilePrompt(error.genomeId); return; }
