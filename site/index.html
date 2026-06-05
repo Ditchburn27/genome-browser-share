@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IGV Genome Browser</title>
+    <title>DITCH Browser</title>
+    <link rel="icon" type="image/png" href="DITCH_browser_icon.png">
     <script src="https://cdn.jsdelivr.net/npm/igv@2.15.13/dist/igv.min.js"
             crossorigin="anonymous"></script>
     <script>var CUSTOM_GENOMES = {};</script>
@@ -271,7 +272,7 @@
 <body>
     <div id="setupView">
         <div class="header">
-            <h1>🧬 IGV Genome Browser - Session Setup</h1>
+            <h1>🧬 DITCH Browser - Session Setup</h1>
         </div>
 
         <div class="setup-container">
@@ -383,13 +384,13 @@
     <div id="browserView" class="browser-view">
 
         <div class="tab-nav" id="mainTabNav">
-            <button class="tab-btn active" onclick="switchTab('igv')" id="tabBtnIgv">🔬 IGV Browser</button>
+            <button class="tab-btn active" onclick="switchTab('igv')" id="tabBtnIgv">🔬 DITCH Browser</button>
             <button class="tab-btn" onclick="switchTab('multilocus')" id="tabBtnMl">📊 Multi-Locus View</button>
         </div>
 
         <div class="tab-panel active" id="tabIgv" style="height:calc(100vh - 40px);overflow:auto;">
         <div class="header">
-            <h1>🧬 IGV Genome Browser</h1>
+            <h1>🧬 DITCH Browser</h1>
         </div>
 
         <div class="controls-bar">
@@ -2681,7 +2682,7 @@
         async function mlRender() {
             Object.keys(mlGeneFeatureCache).forEach(k => { if (!mlState.loci.some(l => l.chr === k)) delete mlGeneFeatureCache[k]; });
             const container = document.getElementById('mlBrowser'), activeTags = mlState.activeTagFilters || new Set(), visibleTracks = mlState.tracks.filter(t => t.visible && (activeTags.size === 0 || Object.values(t.tagCategories || {}).some(v => activeTags.has(v)) || (t.tags || []).some(tag => activeTags.has(tag)))), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
-            if (visibleTracks.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">🔬</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No tracks visible</div><div style="font-size:12px;max-width:36ch;margin:0 auto;line-height:1.7;">Load BigWig files in the <strong>IGV Browser</strong> tab, or clear active tag filters.</div></div>'; return; }
+            if (visibleTracks.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">🔬</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No tracks visible</div><div style="font-size:12px;max-width:36ch;margin:0 auto;line-height:1.7;">Load BigWig files in the <strong>DITCH Browser</strong> tab, or clear active tag filters.</div></div>'; return; }
             if (loci.length === 0) { container.innerHTML = '<div style="padding:60px;text-align:center;color:#999;"><div style="font-size:32px;margin-bottom:12px;">📍</div><div style="font-size:14px;font-weight:600;color:#555;margin-bottom:8px;">No loci configured</div><div style="font-size:12px;max-width:38ch;margin:0 auto 20px;line-height:1.7;">Add gene loci as columns using the button below.</div><button onclick="openLocusManager()" style="padding:8px 20px;background:#4a90e2;color:white;border:none;border-radius:4px;font-size:13px;cursor:pointer;">+ Add Loci</button></div>'; return; }
 
             const showLabels = mlState.showLabels !== false, showBorder = mlState.showBorder !== false, borderClass = showBorder ? '' : ' no-border', gridCols = loci.map(() => '1fr').join(' '), th = mlState.trackHeight;
