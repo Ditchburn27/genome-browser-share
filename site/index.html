@@ -711,7 +711,8 @@
         // Override genomes whose upstream genomes.json URLs are broken (e.g. Broad S3 403)
         const GENOME_OVERRIDES = {
             mm10: {
-                id: 'mm10',
+                // No 'id' field — IGV's expandReference treats objects with id but no fastaURL
+                // as a genome ID lookup, which would pull the broken upstream genomes.json entry.
                 name: 'Mouse (GRCm38/mm10)',
                 twoBitURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.2bit',
                 cytobandURL: 'https://hgdownload.soe.ucsc.edu/goldenPath/mm10/database/cytoBandIdeo.txt.gz',
