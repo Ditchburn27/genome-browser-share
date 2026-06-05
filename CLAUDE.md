@@ -1,75 +1,54 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+The app is a single-file web application (`site/index.html`) for visualising and sharing BigWig/BED/BEDPE genomic data. It has no build step, no bundler, and no backend. All CSS, JavaScript, and HTML live in one file. IGV.js v2.15.8 is loaded from CDN. The app is deployed as a static site on Cloudflare Pages from the `site/` directory.
 
-## Project Overview
+There are two main runtime contexts: the IGV Browser tab (IGV.js renders tracks natively) and the Multi-Locus Figure tab (a custom BigWig reader paints HTML canvas cells, gene models are SVG). State for the two contexts is kept in `sessionData` (IGV side) and `mlState` (multi-locus side), bridged by `mlSyncTracksFromSession()`.
 
-A single-file web application for visualizing and sharing BigWig genomics data using IGV.js. The entire application is contained in `genome-browser-share.html` - there is no build process, bundler, or backend.
+The entire application state for a session is serialisable to `config.json` (track list + genome + locus) and `ml_config.json` (multi-locus loci, track tags/colours, rendering settings). Users share sessions by sharing these JSON files alongside their data files.
 
-## Architecture
+## Deployment
 
-**Single HTML file structure:**
-- All CSS is inline in `<style>` tags
-- All JavaScript is inline in `<script>` tags
-- IGV.js v2.15.8 is loaded from CDN
+- **Host**: Cloudflare Pages, static serving of `site/`.
+- **No server-side logic**: all file I/O is via the browser File API (drag-drop, `<input type="file">`).
+- **Custom genomes via HTTP**: reference files served as static assets from `site/references/`; manifest at `site/references/manifest.js`.
+- **Custom genomes on file://**: user must drag-drop FASTA/FAI/GTF; `references/manifest.js` paths don't work under `file://`.
+- To test locally: `python -m http.server` from project root, open `http://localhost:8000/site/`.
 
-**Key JavaScript components:**
-- `sessionData` object: Stores genome, locus, tracks array, bigWigFiles map, and referenceFiles
-- `igvBrowser`: IGV.js browser instance created via `igv.createBrowser()`
-- File handling: Uses File API with drag-drop and webkitdirectory for folder uploads
-- Track management: Syncs between sessionData.tracks and igvBrowser.trackViews
-- Custom genome support: `references/manifest.js` loaded via `<script>` tag sets `CUSTOM_GENOMES` global
-- `mlState` object: State for the multi-locus figure view (loci, tracks, rendering options)
+## Documentation index
 
-**Three-view UI pattern:**
-- Setup view (`#setupView`): File upload and session configuration
-- Browser view (`#browserView` → Tab 1): IGV visualization with controls
-- Multi-locus figure view (`#browserView` → Tab 2): Side-by-side locus comparison with canvas rendering
+@docs/session-state.md — `sessionData`, `mlState`, object URL tracking, global vars
+@docs/setup-and-file-handling.md — drag-drop, `processFiles()`, `createNewSession()`, CSV import, `addTracksFromFiles()`
+@docs/genome-reference.md — preset vs custom genomes, `buildReferenceConfig()`, `manifest.js`, reference file prompt
+@docs/igv-integration.md — `launchBrowser()`, `buildIgvTrackConfig()`, track sync, keyboard nav, `exportImage()`
+@docs/track-management-igv.md — track controls UI, autoscale groups, Y-range, reorder, `saveSessionConfig()`
+@docs/multilocus-state.md — `mlState` fields, `mlSyncTracksFromSession()`, tag system, save/load ML config
+@docs/multilocus-rendering.md — `mlRender()` pipeline, Y-scale modes, `mlPaintTrack()`, `mlExportSVG()`
+@docs/bigwig-reader.md — custom BigWig parser (B+ tree, R-tree, decompression, zoom data)
+@docs/gene-annotation.md — `mlFetchGeneFeatures()`, GTF/GFF parser, `mlDrawGeneModelSVG()`, gene packing
+@docs/multilocus-ui.md — sidebar, locus manager, figure style panel, HSL colour picker, tag UI
+@docs/utilities.md — `escHtml()`, `hslToHex()`, `hexToHsl()`, `parseLocusString()`, `fmtBp()`, object URL helpers
 
-## Key Functions
+## Before you touch X, read docs/Y.md
 
-- `processFiles()`: Parses config.json, BigWig, BED, and reference files, populates sessionData
-- `launchBrowser()`: Creates IGV browser instance; uses `genome` for presets or `reference` for custom genomes
-- `updateTrackColor()/updateTrackName()`: Syncs UI changes to IGV trackViews by name matching
-- `saveSessionConfig()`: Exports current state as config.json
-- `buildReferenceConfig()`: Builds IGV.js reference config for custom genomes (handles file:// vs HTTP)
-- `populateGenomeDropdown()`: Appends custom genomes from `CUSTOM_GENOMES` to the genome dropdown
-- `parseReferenceFiles()`: Extracts FASTA/FAI/GTF from a list of files
-- `addTracksFromFiles(files)`: Live-loads new tracks into a running IGV session
-- `mlRender()`: Renders the multi-locus figure view (two-pass: fetch BigWig bins → paint canvases)
-- `mlDrawGeneModel(canvas, locus, features, sharedNRows)`: Draws gene annotation row; sharedNRows ensures all locus canvases share the same height
-- `mlComputeGeneRows(locus, features, cssW, gfs, ff)`: Pre-computes row count for gene packing (used to synchronise canvas heights across loci)
-- `openLocusManager()/mlAddLocus()/mlUseCurrentView()`: Manage loci list; mlUseCurrentView fills coords from IGV's current view
+| What you're changing | Read first |
+|---|---|
+| File loading, drag-drop, config.json parsing | docs/setup-and-file-handling.md |
+| Custom genome / FASTA / FAI / GTF support | docs/genome-reference.md |
+| IGV track loading, colors, heights, ordering | docs/igv-integration.md + docs/track-management-igv.md |
+| Autoscale groups or Y-range controls | docs/track-management-igv.md |
+| Multi-locus canvas rendering or Y-scale modes | docs/multilocus-rendering.md |
+| BigWig parsing / signal reading | docs/bigwig-reader.md |
+| Gene model drawing or GTF/GFF parsing | docs/gene-annotation.md |
+| Tags, tag categories, legend, colour picker | docs/multilocus-ui.md |
+| `mlState` fields or ML config save/load | docs/multilocus-state.md |
+| `sessionData` shape or object URLs | docs/session-state.md |
 
-## Session Config Format
+## Hard rules
 
-Sessions are stored as `config.json` with this structure:
-```json
-{
-  "genome": "hg38",
-  "region": "chr17:7,661,779-7,687,550",
-  "tracks": [{"name": "...", "file": "sample.bw", "color": "#FF0000", "type": "wig", "format": "bigwig"}]
-}
-```
-
-## Supported Genomes
-
-**Preset:** hg38, hg19, mm10, mm39 - gene annotations auto-load from UCSC/Ensembl.
-
-**Custom:** Any genome via `references/<name>/` subdirectories containing FASTA + optional FAI/GTF/GFF files. Custom genomes use `custom:<id>` prefix in sessionData.genome and config.json. Run `references/update_manifest.sh` after adding new reference directories to regenerate `references/manifest.js`.
-
-## Custom Genome Architecture
-
-- `references/manifest.js`: Declares `var CUSTOM_GENOMES = {...}` global, loaded via `<script>` tag (works on both file:// and HTTP)
-- A default empty `CUSTOM_GENOMES = {}` is declared before the manifest script, so missing manifest causes no errors
-- On HTTP: FASTA/GTF files loaded via relative paths from manifest
-- On file://: User must provide FASTA/GTF files via file picker or drag-drop
-- `references/update_manifest.sh`: Scans subdirectories and regenerates manifest.js
-
-## Development Notes
-
-- No tests, linting, or build commands - edit the HTML file directly
-- To test: Open `genome-browser-share.html` in a browser
-- For custom genome testing via HTTP: `python -m http.server` in project root
-- IGV trackViews array includes ruler/gene tracks before data tracks; track matching uses name lookup
-- Multi-locus rendering uses a two-pass approach: Pass 1 fetches all BigWig bins in parallel, Pass 2 computes ymaxes, Pass 3 paints track canvases, Pass 4 draws gene models with shared canvas height
+- **Never** call `URL.createObjectURL()` directly — use `mkObjectURL()` so the URL is tracked for revocation.
+- **Always** use `escHtml()` before inserting user-supplied strings into `innerHTML` (filenames, track names).
+- Track name matching between `sessionData.tracks` and `igvBrowser.trackViews` is done by name — names must be unique within a session.
+- IGV's `trackViews[0]` is the ruler track; loops that update track heights or iterate data tracks start at index 1.
+- Changing IGV autoscale group settings requires removing and re-loading the track (`applyGroupYRangeToIGV`) — you cannot mutate IGV's min/max in place.
+- `mlState.tracks[i].tags` is always `Object.values(tagCategories)` — never set it independently.
+- There is no build step. Edit `site/index.html` directly. Test by opening in a browser or via `python -m http.server`.
