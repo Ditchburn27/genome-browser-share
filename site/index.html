@@ -2933,8 +2933,8 @@
                 const exons = g.exons && g.exons.length ? g.exons : [{ start: g.start, end: g.end }];
                 exons.forEach(ex => { const ex1 = bp2x(Math.max(ex.start, locus.start)), ex2 = bp2x(Math.min(ex.end, locus.end)); if (ex2 > ex1) add('rect', { x: ex1, y: midY - 5, width: Math.max(2, ex2 - ex1), height: 10, fill: exonCol }); });
                 add('text', { x: g._tx, y: midY, 'text-anchor': g._anchor, fill: labelCol, 'font-size': lfs, 'font-family': ff, 'font-weight': '700', 'dominant-baseline': 'central' }).textContent = g.name || '';
-                const arrowStep = Math.max(24, (x2 - x1) / 5);
-                for (let ax = x1 + arrowStep * 0.4; ax < x2 - 4; ax += arrowStep) add('polygon', { points: `${ax - 2.5},${midY - 1.8} ${ax + 2.5},${midY} ${ax - 2.5},${midY + 1.8}`, fill: mc });
+                const arrowStep = Math.max(24, (x2 - x1) / 5), flip = g.strand === '-';
+                for (let ax = x1 + arrowStep * 0.4; ax < x2 - 4; ax += arrowStep) add('polygon', { points: flip ? `${ax + 2.5},${midY - 1.8} ${ax - 2.5},${midY} ${ax + 2.5},${midY + 1.8}` : `${ax - 2.5},${midY - 1.8} ${ax + 2.5},${midY} ${ax - 2.5},${midY + 1.8}`, fill: mc });
             });
         }
 
