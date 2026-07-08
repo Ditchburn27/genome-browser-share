@@ -2908,9 +2908,9 @@
             return Object.values(transcripts);
         }
 
-        function mlDrawGeneModelSVG(svg, locus, features, sharedNRows) {
+        function mlDrawGeneModelSVG(svg, locus, features, sharedNRows, cssWOverride) {
             const ff = mlState.fontFamily || 'Arial, sans-serif', mc = mlState.geneModelColor || '#6b5a2e', exonCol = mlState.geneExonColor || '#c4a84a', labelCol = mlState.geneLabelColor || '#3a3320', gfs = mlState.fontSizeGeneName || 13, lfs = Math.max(8, gfs - 3);
-            const overlapping = (features || []).filter(f => f.end > locus.start && f.start < locus.end), cell = svg.closest('.ml-gene-cell'), cssW = cell ? cell.getBoundingClientRect().width : (svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0) || 400, span = Math.max(1, locus.end - locus.start), bp2x = bp => Math.max(0, Math.min(cssW, (bp - locus.start) / span * cssW));
+            const overlapping = (features || []).filter(f => f.end > locus.start && f.start < locus.end), cssW = cssWOverride != null ? cssWOverride : ((() => { const cell = svg.closest('.ml-gene-cell'); return cell ? cell.getBoundingClientRect().width : (svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0) || 400; })()), span = Math.max(1, locus.end - locus.start), bp2x = bp => Math.max(0, Math.min(cssW, (bp - locus.start) / span * cssW));
             const geneMap = {};
             overlapping.forEach(f => { const key = f.name || (f.chr + ':' + f.start); if (!geneMap[key]) geneMap[key] = { ...f, exons: f.exons ? [...f.exons] : [] }; else { if (f.start < geneMap[key].start) geneMap[key].start = f.start; if (f.end > geneMap[key].end) geneMap[key].end = f.end; if (f.exons) geneMap[key].exons.push(...f.exons); } });
             const genes = Object.values(geneMap).sort((a,b) => a.start - b.start), ROW_H = 20, ROW_GAP = 14, TOP_PAD = 14, BOTTOM_PAD = 26;
@@ -2953,7 +2953,7 @@
             return rowEnds.length || 1;
         }
 
-        function mlExportSVG() {
+        async function mlExportSVG() {
             const visibleTracks = mlState.tracks.filter(t => t.visible), loci = mlState.loci.filter(l => l.chr && l.end > l.start);
             if (!visibleTracks.length || !loci.length) { alert('Nothing to export.'); return; }
             const trackW = mlState.exportColW || 260, scale = mlState.exportScale || 2, gap = 10, pillW = 5, ff = (mlState.fontFamily || 'Arial, sans-serif').replace(/'/g, ''), fsGene = mlState.fontSizeGeneName || 13, fsCoord = mlState.fontSizeCoord || 10, fsYmax = mlState.fontSizeYmax || 9, fsTLabel = mlState.fontSizeTrackLabel || 11;
@@ -2983,7 +2983,20 @@
                 legendW = Math.ceil(legendW) + 30;
             }
 
-            const headerH = 46, _geneSvg = document.querySelector('svg[data-gene-li]'), geneH = mlState.showGene ? (_geneSvg ? +_geneSvg.dataset.geneHeight || _geneSvg.getBoundingClientRect().height : 52) : 0;
+            // Gene model row: re-render at export width (trackW) so exon/arrow/label
+            // coordinates match the on-app view. Screen SVGs are laid out in their
+            // measured cell width (~124px); reusing their innerHTML in a 260px column
+            // with preserveAspectRatio="none" stretched the gene track horizontally.
+            const geneRowConsts = { TOP_PAD: 14, ROW_H: 20, ROW_GAP: 14, BOTTOM_PAD: 26 };
+            let geneH = 0, sharedNRows = 1, featuresPerLocus = [];
+            if (mlState.showGene) {
+                const gfs = mlState.fontSizeGeneName || 13;
+                featuresPerLocus = await Promise.all(loci.map(async locus => { let feats = await mlFetchGeneFeatures(locus).catch(() => []); if (locus.hiddenGenes && locus.hiddenGenes.length > 0) feats = feats.filter(f => !f.name || !locus.hiddenGenes.includes(f.name)); return feats; }));
+                sharedNRows = 1;
+                loci.forEach((locus, li) => { const n = mlComputeGeneRows(locus, featuresPerLocus[li], trackW, gfs, ff); if (n > sharedNRows) sharedNRows = n; });
+                geneH = geneRowConsts.TOP_PAD + sharedNRows * geneRowConsts.ROW_H + (sharedNRows - 1) * geneRowConsts.ROW_GAP + geneRowConsts.BOTTOM_PAD;
+            }
+            const headerH = 46;
             const totalW = legendW + labelW + loci.length * (trackW + gap) - gap + 10, totalH = headerH + visibleTracks.length * (th + 2) + (mlState.showGene ? geneH + 6 : 0) + 10, sw = totalW * scale, sh = totalH * scale;
             const figX = legendW;
 
@@ -3040,11 +3053,14 @@
             });
 
             if (mlState.showGene) {
-                const geneY = headerH + visibleTracks.length * (th + 2) + 14, geneCells = Array.from(document.getElementById('mlBrowser').querySelectorAll('.ml-gene-cell'));
-                geneCells.forEach((cell, li) => {
-                    const svgEl = cell.querySelector('svg[data-gene-li]'); if (!svgEl) return;
-                    const x = figX + labelW + li * (trackW + gap), w = cell.getBoundingClientRect().width || trackW, h = Math.max(90, +(svgEl.dataset.geneHeight || 0) || 90);
-                    svg += `<g transform="translate(${x},${geneY})"><svg xmlns="http://www.w3.org/2000/svg" width="${trackW}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${svgEl.innerHTML}</svg></g>`;
+                const geneY = headerH + visibleTracks.length * (th + 2) + 14, ns = 'http://www.w3.org/2000/svg';
+                loci.forEach((locus, li) => {
+                    const x = figX + labelW + li * (trackW + gap);
+                    // Re-render the gene model into a detached SVG at export width,
+                    // then serialise with a 1:1 viewBox (no non-uniform stretch).
+                    const off = document.createElementNS(ns, 'svg');
+                    mlDrawGeneModelSVG(off, locus, featuresPerLocus[li], sharedNRows, trackW);
+                    svg += `<g transform="translate(${x},${geneY})"><svg xmlns="http://www.w3.org/2000/svg" width="${trackW}" height="${geneH}" viewBox="0 0 ${trackW} ${geneH}">${off.innerHTML}</svg></g>`;
                 });
             }
 
